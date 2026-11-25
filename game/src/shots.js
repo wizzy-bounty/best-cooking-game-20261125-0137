@@ -2,7 +2,7 @@
 // plays the REAL rules forward from a fresh world (teleport the chef to a
 // station, call the same tryInteract the keyboard uses, step the clock), so
 // the frame is genuine gameplay and the same seed always gives the same frame.
-import { STATIONS, INGREDIENTS } from './config.js';
+import { STATIONS, INGREDIENTS, RECIPES } from './config.js';
 import { SCREEN_TITLE, SCREEN_PLAY, SCREEN_OVER } from './render.js';
 
 const SAMPLE = 1 / 60;
@@ -51,12 +51,71 @@ function stageStart(world) {
   return { screen: SCREEN_TITLE, best: 0 };
 }
 
-// play: mid-shift hero. Chef at the grill, one patty cooking, a plate on the
-// assembly counter holding bun + grilled patty, one ticket urgent, timer 01:12.
+// Chop a raw lettuce/tomato from the pantry: hold interact at the talenan.
+function chopFromPantry(world, ingredientId) {
+  takeFromPantry(world, ingredientId);
+  const at = frontOf('talenan');
+  go(world, at.x, at.y);
+  act(world);
+  wait(world, 1.4, { ...IDLE, interactHeld: true });
+}
+
+// Grill one patty from the pantry and carry the grilled patty back.
+function grillPatty(world) {
+  takeFromPantry(world, 'patty');
+  const at = frontOf('grill');
+  go(world, at.x, at.y);
+  act(world);
+  wait(world, 4.5);
+  act(world);
+}
+
+// Carry whatever the chef holds onto the plate at the assembly counter.
+function addCarriedToPlate(world) {
+  const at = frontOf('assembly');
+  go(world, at.x, at.y);
+  act(world);
+}
+
+// Build the first open ticket's dish from scratch and serve it, using the
+// same tryInteract the keyboard uses. Staging script only, never the rules:
+// each step is a real pickup / chop / grill / plate / serve.
+function serveFirstOrder(world) {
+  const order = world.state.orders[0];
+  if (!order) return;
+  const recipe = RECIPES[order.recipeIndex];
+  // Fresh plate on the assembly counter.
+  let at = frontOf('assembly');
+  go(world, at.x, at.y);
+  act(world);
+  for (const need of recipe.needs) {
+    if (need.id === 'patty') {
+      grillPatty(world);
+    } else if (need.state === 'chopped') {
+      chopFromPantry(world, need.id);
+    } else {
+      takeFromPantry(world, need.id);
+    }
+    addCarriedToPlate(world);
+  }
+  // Pick the finished plate up and serve it.
+  at = frontOf('assembly');
+  go(world, at.x, at.y);
+  act(world);
+  at = frontOf('serve');
+  go(world, at.x, at.y);
+  act(world);
+}
+
+// play: mid-shift hero. First the opening ticket is served for real (so the
+// cover shows served >= 1 and coins > 0), then a fresh plate is built
+// mid-assembly — bun + grilled patty on the counter, a second patty cooking,
+// one ticket urgent, timer 01:12.
 function stagePlay(world) {
   world.spawnOrder();
   world.spawnOrder();
   world.spawnOrder();
+  serveFirstOrder(world);
   // Plate first: empty hands at assembly puts a fresh plate on the counter.
   let at = frontOf('assembly');
   go(world, at.x, at.y);

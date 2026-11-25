@@ -588,11 +588,70 @@ function drawIsland(ctx, state) {
   void state;
 }
 
+// Two customers waiting at the serve pass, drawn from the open tickets
+// (visual only — no logic, no collision). Heads peek above the counter's
+// top edge into the HUD band; shoulders rest on the counter top.
+function drawWaitingCustomers(ctx, customers) {
+  const waiting = customers.slice(0, 2);
+  const spots = [
+    { x: 1055, shirt: '#2f8f7a', skin: '#f2c89b', hair: '#2b1a10', bubble: -22 },
+    { x: 1120, shirt: '#8a5fc0', skin: '#e8b88a', hair: '#5a5a5a', bubble: 22 },
+  ];
+  waiting.forEach((customer, i) => {
+    const spot = spots[i];
+    if (!spot) return;
+    void customer;
+    ctx.save();
+    // Shoulders behind the counter top edge.
+    ctx.fillStyle = spot.shirt;
+    ctx.beginPath();
+    ctx.moveTo(spot.x - 18, 80);
+    ctx.quadraticCurveTo(spot.x - 18, 56, spot.x, 56);
+    ctx.quadraticCurveTo(spot.x + 18, 56, spot.x + 18, 80);
+    ctx.closePath();
+    ctx.fill();
+    // Head + hair cap.
+    ctx.fillStyle = spot.skin;
+    ctx.beginPath();
+    ctx.arc(spot.x, 44, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = spot.hair;
+    ctx.beginPath();
+    ctx.arc(spot.x, 42, 10, Math.PI, 0);
+    ctx.fill();
+    // Eyes.
+    ctx.fillStyle = '#2b1a10';
+    ctx.beginPath();
+    ctx.arc(spot.x - 3.5, 45, 1.3, 0, Math.PI * 2);
+    ctx.arc(spot.x + 3.5, 45, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Little "..." bubble on the outer side of the head.
+    const bx = spot.x + spot.bubble;
+    const by = 30;
+    ctx.fillStyle = '#fff8e6';
+    ctx.beginPath();
+    ctx.arc(bx, by, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#6b4226';
+    ctx.beginPath();
+    ctx.arc(bx - 4, by, 1.2, 0, Math.PI * 2);
+    ctx.arc(bx, by, 1.2, 0, Math.PI * 2);
+    ctx.arc(bx + 4, by, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+// Visual only: the chef reads ~25% bigger. Collision still uses
+// CHEF_RADIUS in world.js — this scale touches pixels, not rules.
+const CHEF_DRAW_SCALE = 1.25;
+
 function drawChef(ctx, state, t) {
   const chef = state.chef;
   const bob = chef.moving ? Math.sin(t * 12) * 2 : 0;
   ctx.save();
   ctx.translate(chef.x, chef.y + bob * 0.3);
+  ctx.scale(CHEF_DRAW_SCALE, CHEF_DRAW_SCALE);
   // Shadow.
   ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.beginPath();
@@ -638,9 +697,9 @@ function drawChef(ctx, state, t) {
   ctx.fillStyle = '#d94f3d';
   ctx.fillRect(-11, 3, 22, 4);
   ctx.restore();
-  // Carried item floats above the hat.
+  // Carried item floats above the taller hat.
   if (state.carry) {
-    const cy = chef.y - 44 + Math.sin(t * 3) * 2;
+    const cy = chef.y - 52 + Math.sin(t * 3) * 2;
     if (state.carry.kind === 'plate') {
       drawPlate(ctx, chef.x, cy, 46, state.carry.contents);
     } else {
@@ -656,11 +715,11 @@ function drawChef(ctx, state, t) {
     ctx.strokeStyle = 'rgba(0,0,0,0.35)';
     ctx.lineWidth = 5;
     ctx.beginPath();
-    ctx.arc(chef.x, chef.y - 30, 16, 0, Math.PI * 2);
+    ctx.arc(chef.x, chef.y - 38, 16, 0, Math.PI * 2);
     ctx.stroke();
     ctx.strokeStyle = '#ffd34d';
     ctx.beginPath();
-    ctx.arc(chef.x, chef.y - 30, 16, -Math.PI / 2, -Math.PI / 2 + state.chopping.progress * Math.PI * 2);
+    ctx.arc(chef.x, chef.y - 38, 16, -Math.PI / 2, -Math.PI / 2 + state.chopping.progress * Math.PI * 2);
     ctx.stroke();
   }
   // Click-target marker.
@@ -925,6 +984,7 @@ export function draw(ctx, world, t) {
   drawChef(ctx, state, t);
   drawFloaters(ctx, state);
   drawHud(ctx, state, t);
+  drawWaitingCustomers(ctx, state.orders);
   drawBanner(ctx, state);
   ctx.restore();
   if (state.screen === SCREEN_TITLE) drawTitle(ctx, state, t);
