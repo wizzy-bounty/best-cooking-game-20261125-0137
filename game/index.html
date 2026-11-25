@@ -4,24 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" href="data:,">
-<title>SIZZLE RUSH — Dapur Kilat</title>
+<title>SATE BARA — Pasar Malam Grill</title>
 <style>
-  html, body { margin: 0; padding: 0; background: #241a12; }
+  html, body { margin: 0; padding: 0; background: #150a1e; overflow: hidden; }
   body {
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    font-family: system-ui, sans-serif;
-    color: #fff3dc;
+    justify-content: flex-start;
+    font-family: 'Trebuchet MS', 'Segoe UI', Verdana, sans-serif;
+    color: #fff3d6;
   }
   canvas {
     width: min(1280px, 100vw);
     height: auto;
     display: block;
-    background: #c96f3f;
+    background: #241019;
     image-rendering: auto;
+    cursor: pointer;
   }
   #status {
     margin-top: 10px;
@@ -33,7 +34,7 @@
 </head>
 <body>
 <canvas id="game" width="1280" height="720"></canvas>
-<div id="status">Memuat dapur…</div>
+<div id="status">Memuat pasar malam…</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

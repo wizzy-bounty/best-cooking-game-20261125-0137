@@ -1,15 +1,14 @@
-// Render: every pixel of SIZZLE RUSH. Reads world.state, draws on one canvas.
-// Screen names are re-exported here so main.js and shots.js share them.
-import {
-  CANVAS_WIDTH, CANVAS_HEIGHT, HUD_HEIGHT, PALETTE, INGREDIENT_BY_ID,
-  RECIPES, STATIONS, ISLAND, CHEF_RADIUS,
-} from './config.js';
+// render.js — every pixel of Sate Bara is drawn here on one canvas:
+// a night market at dusk, string lights, a glowing charcoal grill, smoke,
+// an order board, ingredient trays and a plate ready to serve.
 
-export const SCREEN_TITLE = 'title';
-export const SCREEN_PLAY = 'play';
-export const SCREEN_OVER = 'over';
+import { SKEWER_TYPES, SAUCES, SKEWER_ORDER, SAUCE_ORDER, DONENESS } from './data.js';
 
-function roundRect(ctx, x, y, w, h, r) {
+export const W = 1280;
+export const H = 720;
+const FONT = `'Trebuchet MS','Segoe UI',Verdana,sans-serif`;
+
+export function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -19,975 +18,718 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function fmtTime(seconds) {
-  const total = Math.max(0, Math.ceil(seconds));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-}
-
-function fmtCoins(n) {
-  return `Rp ${n.toLocaleString('id-ID')}`;
-}
-
-// One ingredient icon, drawn from shapes (no image files, no network).
-export function drawIngredient(ctx, kind, state, x, y, size) {
-  const def = INGREDIENT_BY_ID[kind];
-  const half = size / 2;
-  ctx.save();
-  ctx.translate(x, y);
-  if (kind === 'bun') {
-    ctx.fillStyle = def.dark;
-    ctx.beginPath();
-    ctx.ellipse(0, half * 0.35, half, half * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.ellipse(0, -half * 0.15, half, half * 0.62, 0, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = '#fff8e6';
-    ctx.fillRect(-half * 0.5, -half * 0.28, half * 0.2, half * 0.12);
-    ctx.fillRect(half * 0.15, -half * 0.42, half * 0.2, half * 0.12);
-  } else if (kind === 'patty') {
-    ctx.fillStyle = state === 'burnt' ? '#1c1210' : def.dark;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, half, half * 0.62, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = state === 'burnt' ? '#3a2320' : def.color;
-    ctx.beginPath();
-    ctx.ellipse(0, -half * 0.18, half * 0.92, half * 0.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    if (state === 'grilled') {
-      ctx.strokeStyle = '#57310f';
-      ctx.lineWidth = Math.max(1.5, size * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(-half * 0.5, -half * 0.35);
-      ctx.lineTo(-half * 0.2, half * 0.1);
-      ctx.moveTo(half * 0.1, -half * 0.4);
-      ctx.lineTo(half * 0.4, half * 0.05);
-      ctx.stroke();
-    }
-    if (state === 'burnt') {
-      ctx.strokeStyle = '#888';
-      ctx.lineWidth = Math.max(1.5, size * 0.06);
-      ctx.beginPath();
-      ctx.moveTo(-half * 0.4, -half * 0.5);
-      ctx.quadraticCurveTo(0, -half * 0.9, half * 0.4, -half * 0.5);
-      ctx.stroke();
-    }
-  } else if (kind === 'lettuce') {
-    ctx.fillStyle = def.dark;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i += 1) {
-      const a = (i / 6) * Math.PI * 2;
-      ctx.ellipse(Math.cos(a) * half * 0.45, Math.sin(a) * half * 0.45, half * 0.5, half * 0.38, a, 0, Math.PI * 2);
-    }
-    ctx.fill();
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.arc(0, 0, half * 0.72, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#8ed07e';
-    ctx.lineWidth = Math.max(1, size * 0.05);
-    ctx.beginPath();
-    ctx.moveTo(0, -half * 0.6);
-    ctx.lineTo(0, half * 0.6);
-    ctx.moveTo(-half * 0.6, 0);
-    ctx.lineTo(half * 0.6, 0);
-    ctx.stroke();
-    if (state === 'chopped') {
-      ctx.strokeStyle = def.dark;
-      ctx.beginPath();
-      ctx.moveTo(-half * 0.4, -half * 0.2);
-      ctx.lineTo(half * 0.4, half * 0.3);
-      ctx.moveTo(half * 0.4, -half * 0.3);
-      ctx.lineTo(-half * 0.4, half * 0.2);
-      ctx.stroke();
-    }
-  } else if (kind === 'tomato') {
-    ctx.fillStyle = def.dark;
-    ctx.beginPath();
-    ctx.arc(0, 0, half, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.arc(0, -half * 0.08, half * 0.9, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ff8a7a';
-    ctx.beginPath();
-    ctx.ellipse(-half * 0.35, -half * 0.4, half * 0.3, half * 0.18, -0.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#2f7a24';
-    ctx.beginPath();
-    ctx.moveTo(0, -half);
-    ctx.lineTo(-half * 0.28, -half * 0.62);
-    ctx.lineTo(half * 0.28, -half * 0.62);
-    ctx.closePath();
-    ctx.fill();
-    if (state === 'chopped') {
-      ctx.strokeStyle = '#ffb3a7';
-      ctx.lineWidth = Math.max(1.5, size * 0.07);
-      ctx.beginPath();
-      ctx.moveTo(-half * 0.55, 0);
-      ctx.lineTo(half * 0.55, 0);
-      ctx.moveTo(0, -half * 0.55);
-      ctx.lineTo(0, half * 0.55);
-      ctx.stroke();
-    }
-  } else if (kind === 'cheese') {
-    ctx.fillStyle = def.dark;
-    ctx.beginPath();
-    ctx.moveTo(-half, half * 0.7);
-    ctx.lineTo(half, half * 0.7);
-    ctx.lineTo(half * 0.55, -half * 0.6);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = def.color;
-    ctx.beginPath();
-    ctx.moveTo(-half * 0.92, half * 0.6);
-    ctx.lineTo(half * 0.92, half * 0.6);
-    ctx.lineTo(half * 0.5, -half * 0.55);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = def.dark;
-    ctx.beginPath();
-    ctx.arc(-half * 0.25, half * 0.15, half * 0.14, 0, Math.PI * 2);
-    ctx.arc(half * 0.3, half * 0.3, half * 0.11, 0, Math.PI * 2);
-    ctx.arc(half * 0.15, -half * 0.2, half * 0.12, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawPlate(ctx, x, y, size, contents) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = '#cfd6da';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, size / 2, size / 2.9, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#f4f8f9';
-  ctx.beginPath();
-  ctx.ellipse(0, -size * 0.05, size / 2.3, size / 3.4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  if (contents) {
-    // Stack the dish from the bottom up, slightly offset so each layer reads.
-    const layers = contents.slice().reverse();
-    layers.forEach((item, i) => {
-      drawIngredient(ctx, item.kind, item.state, 0, -size * 0.06 - i * size * 0.09, size * 0.62);
-    });
-  }
-  ctx.restore();
-}
-
-function drawHeart(ctx, x, y, size, filled) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = filled ? '#ff5a6e' : 'rgba(255,255,255,0.25)';
-  ctx.beginPath();
-  ctx.moveTo(0, size * 0.35);
-  ctx.bezierCurveTo(-size * 0.6, -size * 0.25, -size * 0.25, -size * 0.6, 0, -size * 0.2);
-  ctx.bezierCurveTo(size * 0.25, -size * 0.6, size * 0.6, -size * 0.25, 0, size * 0.35);
-  ctx.fill();
-  ctx.restore();
-}
-
-function drawFloor(ctx, t) {
-  const tile = 80;
-  for (let y = HUD_HEIGHT; y < CANVAS_HEIGHT; y += tile) {
-    for (let x = 0; x < CANVAS_WIDTH; x += tile) {
-      const odd = ((x / tile) + (y / tile)) % 2 === 0;
-      ctx.fillStyle = odd ? PALETTE.floorA : PALETTE.floorB;
-      ctx.fillRect(x, y, tile, tile);
-    }
-  }
-  // Woven mats break the checker up so the floor never reads empty.
-  const mats = [
-    { x: 150, y: 300, w: 190, h: 110, c: '#8a5a2b' },
-    { x: 940, y: 300, w: 190, h: 110, c: '#8a5a2b' },
-    { x: 300, y: 560, w: 170, h: 100, c: '#7d9b76' },
-    { x: 820, y: 560, w: 170, h: 100, c: '#7d9b76' },
-    { x: 150, y: 460, w: 150, h: 90, c: '#a34d2d' },
-    { x: 980, y: 460, w: 150, h: 90, c: '#a34d2d' },
-  ];
-  for (const mat of mats) {
-    ctx.fillStyle = mat.c;
-    roundRect(ctx, mat.x, mat.y, mat.w, mat.h, 10);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(255,243,220,0.5)';
-    ctx.lineWidth = 2;
-    roundRect(ctx, mat.x + 8, mat.y + 8, mat.w - 16, mat.h - 16, 7);
-    ctx.stroke();
-  }
-  // Big centre rug under the island table.
-  ctx.fillStyle = '#9c4a26';
-  roundRect(ctx, 400, 458, 480, 110, 14);
-  ctx.fill();
-  ctx.strokeStyle = '#ffd34d';
-  ctx.lineWidth = 3;
-  roundRect(ctx, 412, 470, 456, 86, 10);
-  ctx.stroke();
-  ctx.fillStyle = '#ffd34d';
-  ctx.font = 'bold 13px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('•  WARUNG SARI  •', 640, 552);
-  // Stools by the mats.
-  for (const [sx, sy] of [[260, 440], [1020, 440], [700, 600]]) {
-    ctx.fillStyle = '#6b4226';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 16, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#a9713f';
-    ctx.beginPath();
-    ctx.arc(sx, sy, 11, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Basket of greens near the left wall.
-  ctx.fillStyle = '#8a5a2b';
-  ctx.beginPath();
-  ctx.ellipse(100, 430, 26, 18, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#4da53a';
-  ctx.beginPath();
-  ctx.arc(90, 416, 10, 0, Math.PI * 2);
-  ctx.arc(104, 414, 10, 0, Math.PI * 2);
-  ctx.arc(112, 422, 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#e23b2e';
-  ctx.beginPath();
-  ctx.arc(98, 420, 6, 0, Math.PI * 2);
-  ctx.fill();
-  // Crates and a potted plant along the walls.
-  ctx.fillStyle = '#8a5a2b';
-  ctx.fillRect(84, 620, 52, 52);
-  ctx.fillStyle = '#a9713f';
-  ctx.fillRect(88, 624, 44, 8);
-  ctx.fillRect(88, 644, 44, 8);
-  ctx.fillStyle = '#8a5a2b';
-  ctx.fillRect(1140, 620, 52, 52);
-  ctx.fillStyle = '#a9713f';
-  ctx.fillRect(1144, 624, 44, 8);
-  ctx.fillRect(1144, 644, 44, 8);
-  ctx.fillStyle = '#b5563c';
-  ctx.beginPath();
-  ctx.moveTo(96, 250);
-  ctx.lineTo(124, 250);
-  ctx.lineTo(118, 282);
-  ctx.lineTo(102, 282);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#4da53a';
-  ctx.beginPath();
-  ctx.arc(110, 238, 16, 0, Math.PI * 2);
-  ctx.arc(96, 246, 10, 0, Math.PI * 2);
-  ctx.arc(124, 246, 10, 0, Math.PI * 2);
-  ctx.fill();
-  void t;
-}
-
-function drawStationBase(ctx, station) {
-  ctx.fillStyle = PALETTE.woodDark;
-  ctx.fillRect(station.x, station.y, station.w, station.h);
-  ctx.fillStyle = PALETTE.woodTop;
-  ctx.fillRect(station.x, station.y, station.w, 14);
-  ctx.fillStyle = PALETTE.woodEdge;
-  ctx.fillRect(station.x, station.y + station.h - 4, station.w, 4);
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(station.x, station.y);
-  ctx.lineTo(station.x, station.y + station.h);
-  ctx.moveTo(station.x + station.w, station.y);
-  ctx.lineTo(station.x + station.w, station.y + station.h);
-  ctx.stroke();
-  // Big in-world label on the counter front, low in the band so the station
-  // contents above it never cover the text.
-  ctx.fillStyle = '#fff3dc';
-  ctx.font = 'bold 15px system-ui, sans-serif';
-  ctx.textAlign = 'center';
+function text(ctx, s, x, y, size, color, align, weight) {
+  ctx.fillStyle = color;
+  ctx.font = `${weight || 'bold'} ${size}px ${FONT}`;
+  ctx.textAlign = align || 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(station.label, station.x + station.w / 2, station.y + 46);
-  ctx.fillStyle = 'rgba(255,243,220,0.75)';
-  ctx.font = '9px system-ui, sans-serif';
-  ctx.fillText(station.sub, station.x + station.w / 2, station.y + 59);
+  ctx.fillText(s, x, y);
 }
 
-function drawPantry(ctx, state) {
-  const station = STATIONS.pantry;
-  drawStationBase(ctx, station);
-  // Five ingredients on the counter, selection ring on the chosen one.
-  // Centred on y+18 so they stay inside the 64px counter band.
-  const ids = ['bun', 'patty', 'lettuce', 'tomato', 'cheese'];
-  ids.forEach((id, i) => {
-    const x = station.x + 28 + i * 42;
-    const y = station.y + 18;
-    if (i === state.pantryIndex) {
-      ctx.strokeStyle = '#ffd34d';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(x, y, 16, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    drawIngredient(ctx, id, 'raw', x, y, 24);
-  });
+function fmtTime(sec) {
+  const s = Math.max(0, Math.ceil(sec));
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function drawTalenan(ctx, state) {
-  const station = STATIONS.talenan;
-  drawStationBase(ctx, station);
-  ctx.fillStyle = '#d9b380';
-  roundRect(ctx, station.x + 78, station.y + 8, 100, 22, 5);
-  ctx.fill();
-  ctx.strokeStyle = '#8a5a2b';
-  ctx.lineWidth = 2;
-  roundRect(ctx, station.x + 78, station.y + 8, 100, 22, 5);
-  ctx.stroke();
-  // Chopped bits already on the board + the item being chopped.
-  const bits = state.chopping ? 6 : 3;
-  for (let i = 0; i < bits; i += 1) {
-    ctx.fillStyle = i % 2 === 0 ? '#4da53a' : '#e23b2e';
-    ctx.beginPath();
-    ctx.arc(station.x + 92 + i * 14, station.y + 19 + (i % 2) * 4, 4, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  if (state.chopping) {
-    const cx = station.x + 128;
-    const cy = station.y + 19;
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 11, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = '#ffd34d';
-    ctx.beginPath();
-    ctx.arc(cx, cy, 11, -Math.PI / 2, -Math.PI / 2 + state.chopping.progress * Math.PI * 2);
-    ctx.stroke();
-  }
+function fmtRp(n) {
+  return 'Rp ' + n.toLocaleString('id-ID');
 }
 
-function drawGrill(ctx, state, t) {
-  const station = STATIONS.grill;
-  drawStationBase(ctx, station);
-  // Two slots: dark grates with a flame under the cooking one. Everything
-  // lives in the top half of the counter so the label below stays readable.
-  state.grill.forEach((slot, i) => {
-    const cx = station.x + 64 + i * 128;
-    const cy = station.y + 18;
-    ctx.fillStyle = '#2b1a10';
-    roundRect(ctx, cx - 46, cy - 12, 92, 24, 6);
-    ctx.fill();
-    ctx.strokeStyle = '#555';
-    ctx.lineWidth = 2;
-    for (let g = -2; g <= 2; g += 1) {
-      ctx.beginPath();
-      ctx.moveTo(cx + g * 16, cy - 10);
-      ctx.lineTo(cx + g * 16, cy + 10);
-      ctx.stroke();
-    }
-    if (slot.state === 'cooking') {
-      const flick = Math.sin(t * 9 + i * 2) * 3;
-      ctx.fillStyle = '#ff7a1a';
-      ctx.beginPath();
-      ctx.moveTo(cx - 16, cy + 12);
-      ctx.quadraticCurveTo(cx - 10, cy - 4 + flick, cx, cy - 10 + flick);
-      ctx.quadraticCurveTo(cx + 10, cy - 4 + flick, cx + 16, cy + 12);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#ffd34d';
-      ctx.beginPath();
-      ctx.moveTo(cx - 8, cy + 12);
-      ctx.quadraticCurveTo(cx - 4, cy + 2, cx, cy - 2 + flick);
-      ctx.quadraticCurveTo(cx + 4, cy + 2, cx + 8, cy + 12);
-      ctx.closePath();
-      ctx.fill();
-    }
-    if (slot.item) {
-      drawIngredient(ctx, 'patty', slot.state === 'ready' ? 'grilled' : slot.state === 'burnt' ? 'burnt' : 'raw', cx, cy, 26);
-    }
-    // Progress bar: cooking fills orange, ready flashes green, burnt is red.
-    if (slot.state === 'cooking' || slot.state === 'ready') {
-      const frac = slot.state === 'cooking' ? slot.t / 4 : 1 - (slot.t - 4) / 3;
-      ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      ctx.fillRect(cx - 40, cy + 16, 80, 5);
-      ctx.fillStyle = slot.state === 'cooking' ? '#ff7a1a' : (Math.sin(t * 8) > 0 ? '#4da53a' : '#8ed07e');
-      ctx.fillRect(cx - 40, cy + 16, 80 * Math.max(0, Math.min(1, frac)), 5);
-    }
-    if (slot.state === 'burnt') {
-      ctx.fillStyle = '#ff6b5e';
-      ctx.font = 'bold 10px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('GOSONG!', cx, cy + 21);
-    }
-  });
-}
-
-function drawAssembly(ctx, state) {
-  const station = STATIONS.assembly;
-  drawStationBase(ctx, station);
-  // Stack of clean plates on the left of the counter.
-  for (let i = 0; i < 3; i += 1) {
-    ctx.fillStyle = i === 2 ? '#f4f8f9' : '#cfd6da';
-    ctx.beginPath();
-    ctx.ellipse(station.x + 34, station.y + 20 - i * 3, 20, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  if (state.plate) {
-    drawPlate(ctx, station.x + 150, station.y + 24, 38, state.plate.contents);
-  } else {
-    ctx.fillStyle = 'rgba(255,243,220,0.6)';
-    ctx.font = '10px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('ambil piring di sini', station.x + 150, station.y + 20);
-  }
-}
-
-function drawServe(ctx, state, t) {
-  const station = STATIONS.serve;
-  drawStationBase(ctx, station);
-  // Bell on a tray, ringing gently when a plate waits to be served.
-  const ringing = state.carry && state.carry.kind === 'plate';
-  const wobble = ringing ? Math.sin(t * 14) * 0.12 : 0;
-  ctx.save();
-  ctx.translate(station.x + 128, station.y + 22);
-  ctx.rotate(wobble);
-  ctx.fillStyle = '#c9a227';
+export function drawHeart(ctx, x, y, s, color) {
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(-16, 4);
-  ctx.quadraticCurveTo(0, -16, 16, 4);
+  ctx.moveTo(x, y + s * 0.35);
+  ctx.bezierCurveTo(x - s, y - s * 0.45, x - s * 0.45, y - s, x, y - s * 0.35);
+  ctx.bezierCurveTo(x + s * 0.45, y - s, x + s, y - s * 0.45, x, y + s * 0.35);
   ctx.closePath();
   ctx.fill();
-  ctx.fillStyle = '#ffd34d';
+}
+
+function drawStar(ctx, x, y, r, color) {
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.arc(0, 5, 3, 0, Math.PI * 2);
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r * 0.45;
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const px = x + Math.cos(a) * rad;
+    const py = y + Math.sin(a) * rad;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
   ctx.fill();
-  ctx.restore();
-  ctx.fillStyle = '#8a5a2b';
-  ctx.fillRect(station.x + 96, station.y + 30, 64, 5);
 }
 
-function drawTrash(ctx) {
-  const station = STATIONS.trash;
-  ctx.fillStyle = PALETTE.woodDark;
-  ctx.fillRect(station.x, station.y, station.w, station.h);
-  ctx.fillStyle = PALETTE.woodTop;
-  ctx.fillRect(station.x, station.y, station.w, 12);
-  ctx.fillStyle = '#3a3f44';
-  roundRect(ctx, 22, 620, 84, 74, 8);
-  ctx.fill();
-  ctx.fillStyle = '#565d63';
-  ctx.fillRect(18, 612, 92, 12);
-  ctx.fillStyle = '#fff3dc';
-  ctx.font = 'bold 13px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('TRASH', 64, 712);
-}
+// ---------- background ----------
 
-function drawWallDecor(ctx) {
-  // Menu poster on the left wall.
-  ctx.fillStyle = '#fff8e6';
-  ctx.fillRect(8, 150, 48, 76);
-  ctx.strokeStyle = '#b97f3a';
+function drawSky(ctx, game) {
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#150a2a');
+  g.addColorStop(0.45, '#3a1a30');
+  g.addColorStop(0.75, '#6b2d1e');
+  g.addColorStop(1, '#2a1410');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+  // Stars.
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  for (let i = 0; i < 60; i++) {
+    const x = (i * 173) % W;
+    const y = (i * 97) % 150;
+    ctx.globalAlpha = 0.25 + ((i * 7) % 10) / 16;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+  // Distant stall silhouettes with warm windows.
+  const stalls = [[60, 150, 150], [280, 130, 170], [980, 140, 160], [1140, 120, 130]];
+  for (const [x, w, h] of stalls) {
+    ctx.fillStyle = '#1e0e1e';
+    ctx.fillRect(x, 250 - h, w, h);
+    ctx.beginPath();
+    ctx.moveTo(x - 10, 250 - h);
+    ctx.lineTo(x + w / 2, 250 - h - 26);
+    ctx.lineTo(x + w + 10, 250 - h);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffb347';
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(x + 18, 250 - h + 34, 26, 22);
+    ctx.fillRect(x + w - 48, 250 - h + 34, 26, 22);
+    ctx.globalAlpha = 1;
+  }
+  // Ground planks.
+  ctx.fillStyle = '#241019';
+  ctx.fillRect(0, 250, W, H - 250);
+  ctx.strokeStyle = 'rgba(255,179,71,0.10)';
   ctx.lineWidth = 2;
-  ctx.strokeRect(8, 150, 48, 76);
-  ctx.fillStyle = '#d94f3d';
-  ctx.font = 'bold 10px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('MENU', 32, 166);
-  ctx.fillStyle = '#2b1a10';
-  ctx.font = '8px system-ui, sans-serif';
-  ctx.fillText('Burger 220', 32, 182);
-  ctx.fillText('Salad 120', 32, 196);
-  ctx.fillText('Keju 300', 32, 210);
-  ctx.fillText('Sari 340', 32, 224);
-  // Hanging pans on the left wall, below the poster.
-  for (let i = 0; i < 3; i += 1) {
-    const py = 300 + i * 56;
-    ctx.strokeStyle = '#3a3f44';
-    ctx.lineWidth = 3;
+  for (let y = 300; y < H; y += 52) {
     ctx.beginPath();
-    ctx.arc(32, py, 14, 0, Math.PI * 2);
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
     ctx.stroke();
+  }
+  void game;
+}
+
+function drawStringLights(ctx, t) {
+  const rows = [
+    { y0: 8, y1: 70, sag: 34 },
+    { y0: 30, y1: 96, sag: 30 },
+  ];
+  const cols = ['#ffb347', '#ff6a5e', '#ffe08a', '#ff9a3d'];
+  for (const row of rows) {
+    ctx.strokeStyle = 'rgba(20,10,20,0.9)';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(32, py - 14);
-    ctx.lineTo(32, py - 24);
+    ctx.moveTo(0, row.y0);
+    ctx.quadraticCurveTo(W / 2, row.y0 + row.sag * 2, W, row.y1);
     ctx.stroke();
-    ctx.fillStyle = '#565d63';
-    ctx.beginPath();
-    ctx.arc(32, py, 10, 0, Math.PI * 2);
+    for (let i = 0; i < 22; i++) {
+      const u = i / 21;
+      const x = u * W;
+      const y = (1 - u) * (1 - u) * row.y0 + 2 * (1 - u) * u * (row.y0 + row.sag * 2) + u * u * row.y1;
+      const c = cols[i % cols.length];
+      const flick = 0.75 + 0.25 * Math.sin(t * 2 + i * 1.7);
+      const glow = ctx.createRadialGradient(x, y + 8, 1, x, y + 8, 16);
+      glow.addColorStop(0, c);
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = flick * 0.8;
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(x, y + 8, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(x, y + 8, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+// ---------- food drawing ----------
+
+export function drawMiniSkewer(ctx, x, y, type, doneness, scale) {
+  const s = scale || 1;
+  const t = SKEWER_TYPES[type];
+  const col = doneness === undefined ? t.raw : donenessColor(t, doneness);
+  ctx.strokeStyle = '#e8c98a';
+  ctx.lineWidth = 3 * s;
+  ctx.beginPath();
+  ctx.moveTo(x - 26 * s, y);
+  ctx.lineTo(x + 26 * s, y);
+  ctx.stroke();
+  for (let i = -1; i <= 1; i++) {
+    ctx.fillStyle = col;
+    rr(ctx, x + i * 15 * s - 7 * s, y - 7 * s, 14 * s, 14 * s, 3 * s);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    rr(ctx, x + i * 15 * s - 7 * s, y - 7 * s, 14 * s, 5 * s, 3 * s);
     ctx.fill();
   }
-  // Jar shelf on the right wall.
-  ctx.fillStyle = '#6b4226';
-  ctx.fillRect(1222, 480, 52, 8);
-  const jarColors = ['#e23b2e', '#ffc93c', '#4da53a'];
-  jarColors.forEach((color, i) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(1226 + i * 17, 452, 13, 28);
-    ctx.fillStyle = '#8a5a2b';
-    ctx.fillRect(1226 + i * 17, 448, 13, 5);
+}
+
+function donenessColor(t, d) {
+  if (d < 30) return t.raw;
+  if (d < 60) return t.mid;
+  if (d < DONENESS.burntAt) return t.done;
+  return '#241610';
+}
+
+function drawSkewerOnGrill(ctx, x, y, slot) {
+  const t = SKEWER_TYPES[slot.type];
+  const col = donenessColor(t, slot.doneness);
+  // Char glow under the skewer.
+  const glow = ctx.createRadialGradient(x, y + 6, 4, x, y + 6, 70);
+  glow.addColorStop(0, 'rgba(255,122,47,0.35)');
+  glow.addColorStop(1, 'rgba(255,122,47,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 70, y - 40, 140, 90);
+  // Stick.
+  ctx.strokeStyle = '#d9a05b';
+  ctx.lineWidth = 5;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - 78, y);
+  ctx.lineTo(x + 78, y);
+  ctx.stroke();
+  // Meat cubes.
+  for (let i = -1; i <= 1; i++) {
+    const cx = x + i * 42;
+    ctx.fillStyle = col;
+    rr(ctx, cx - 17, y - 15, 34, 30, 7);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    rr(ctx, cx - 17, y - 15, 34, 10, 7);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 2;
+    rr(ctx, cx - 17, y - 15, 34, 30, 7);
+    ctx.stroke();
+  }
+  // Doneness meter.
+  const mw = 110;
+  const mx = x - mw / 2;
+  const my = y + 26;
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  rr(ctx, mx - 2, my - 2, mw + 4, 10, 5);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(122,199,79,0.35)';
+  const zx = mx + (DONENESS.perfectMin / 100) * mw;
+  const zw = ((DONENESS.perfectMax - DONENESS.perfectMin) / 100) * mw;
+  rr(ctx, zx, my, zw, 6, 3);
+  ctx.fill();
+  const d = Math.min(100, slot.doneness);
+  ctx.fillStyle = d >= DONENESS.burntAt ? '#1c1c1c' : d > DONENESS.perfectMax ? '#ff5a2a' : '#ffb347';
+  rr(ctx, mx, my, Math.max(4, (d / 100) * mw), 6, 3);
+  ctx.fill();
+  if (slot.flipped) {
+    ctx.fillStyle = '#7ac74f';
+    ctx.beginPath();
+    ctx.arc(x + 62, y - 26, 9, 0, Math.PI * 2);
+    ctx.fill();
+    text(ctx, '✓', x + 62, y - 25, 12, '#12240a', 'center', 'bold');
+  }
+  if (slot.doneness > DONENESS.perfectMax && slot.doneness < DONENESS.burntAt) {
+    text(ctx, 'CEPAT ANGKAT!', x, y - 34, 13, '#ff8a5e', 'center', 'bold');
+  }
+  if (slot.doneness >= DONENESS.burntAt) {
+    text(ctx, 'GOSONG', x, y - 34, 13, '#ff5a2a', 'center', 'bold');
+  }
+}
+
+// ---------- panels ----------
+
+function drawOrderBoard(ctx, game) {
+  const x = 16, y = 76, w = 420, h = 158;
+  ctx.fillStyle = '#3a2415';
+  rr(ctx, x, y, w, h, 12);
+  ctx.fill();
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 2;
+  rr(ctx, x, y, w, h, 12);
+  ctx.stroke();
+  text(ctx, 'PAPAN PESANAN', x + 16, y + 18, 15, '#ffb347', 'left', 'bold');
+  text(ctx, `${game.orders.length}/4 antre`, x + w - 14, y + 18, 12, '#e8c98a', 'right', 'normal');
+  if (game.orders.length === 0) {
+    text(ctx, 'Belum ada pesanan — pelanggan segera datang…', x + w / 2, y + 84, 14, '#c9a06a', 'center', 'normal');
+    return;
+  }
+  game.orders.forEach((o, i) => {
+    const ty = y + 36 + i * 30;
+    const match = game.plateMatches(o);
+    ctx.fillStyle = match ? '#2e5d3a' : '#fff3d6';
+    rr(ctx, x + 10, ty, w - 20, 26, 6);
+    ctx.fill();
+    ctx.fillStyle = o.color;
+    ctx.beginPath();
+    ctx.arc(x + 26, ty + 13, 8, 0, Math.PI * 2);
+    ctx.fill();
+    text(ctx, o.name, x + 40, ty + 13, 13, '#2a1a10', 'left', 'bold');
+    o.skewers.forEach((s, k) => {
+      drawMiniSkewer(ctx, x + 168 + k * 40, ty + 13, s, 70, 0.55);
+    });
+    if (o.sauce) {
+      ctx.fillStyle = SAUCES[o.sauce].color;
+      ctx.beginPath();
+      ctx.arc(x + 168 + o.skewers.length * 40 + 8, ty + 13, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    text(ctx, fmtRp(o.price), x + w - 62, ty + 13, 12, '#2a1a10', 'right', 'bold');
+    const pw = 44;
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    rr(ctx, x + w - 56, ty + 4, pw, 5, 2);
+    ctx.fill();
+    ctx.fillStyle = o.patience > 0.5 ? '#7ac74f' : o.patience > 0.25 ? '#ffb347' : '#ff5a2a';
+    rr(ctx, x + w - 56, ty + 4, Math.max(3, pw * o.patience), 5, 2);
+    ctx.fill();
   });
 }
 
-function drawSink(ctx) {
-  ctx.fillStyle = PALETTE.woodDark;
-  ctx.fillRect(1216, 128, 64, 592);
-  ctx.fillStyle = PALETTE.woodTop;
-  ctx.fillRect(1216, 128, 14, 592);
-  ctx.fillStyle = '#9fb8c8';
-  roundRect(ctx, 1232, 200, 34, 60, 8);
+function drawCustomers(ctx, game) {
+  const x = 860, y = 76, w = 404, h = 158;
+  ctx.fillStyle = 'rgba(20,10,20,0.55)';
+  rr(ctx, x, y, w, h, 12);
   ctx.fill();
-  ctx.strokeStyle = '#6b7a86';
+  ctx.strokeStyle = 'rgba(255,179,71,0.5)';
+  ctx.lineWidth = 2;
+  rr(ctx, x, y, w, h, 12);
+  ctx.stroke();
+  text(ctx, 'PELANGGAN MENUNGGU', x + 16, y + 18, 15, '#ffb347', 'left', 'bold');
+  game.customerSlots.forEach((c, i) => {
+    const cx = x + 70 + i * 135;
+    const cy = y + 78;
+    // Body.
+    ctx.fillStyle = c.shirt;
+    rr(ctx, cx - 42, cy + 18, 84, 52, 14);
+    ctx.fill();
+    // Head.
+    ctx.fillStyle = c.skin;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 34, 0, Math.PI * 2);
+    ctx.fill();
+    // Hair.
+    ctx.fillStyle = c.hair;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 8, 34, Math.PI, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(cx - 34, cy - 12, 68, 10);
+    // Eyes + smile.
+    ctx.fillStyle = '#1c1214';
+    ctx.beginPath();
+    ctx.arc(cx - 12, cy + 2, 4, 0, Math.PI * 2);
+    ctx.arc(cx + 12, cy + 2, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#1c1214';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(cx, cy + 8, 11, 0.15 * Math.PI, 0.85 * Math.PI);
+    ctx.stroke();
+    text(ctx, c.name, cx, y + 138, 13, '#fff3d6', 'center', 'bold');
+  });
+  const waiting = game.orders.length;
+  drawHeart(ctx, x + w - 30, y + 18, 9, waiting > 0 ? '#ff5a6e' : '#5a3a4a');
+  text(ctx, `${waiting} pesanan`, x + w - 48, y + 18, 12, '#e8c98a', 'right', 'normal');
+}
+
+function drawTopBar(ctx, game) {
+  ctx.fillStyle = '#2a0f1a';
+  ctx.fillRect(0, 0, W, 64);
+  ctx.fillStyle = '#ffb347';
+  ctx.fillRect(0, 64, W, 3);
+  // Title.
+  text(ctx, '🔥 SATE BARA', 20, 34, 26, '#ffb347', 'left', 'bold');
+  text(ctx, 'Pasar Malam Grill', 244, 36, 14, '#e8c98a', 'left', 'normal');
+  // Timer.
+  const low = game.mode === 'play' && game.timeLeft <= 30;
+  const tc = low ? (Math.sin(game.now * 8) > 0 ? '#ff5a2a' : '#fff3d6') : '#fff3d6';
+  text(ctx, fmtTime(game.timeLeft), W / 2, 30, 34, tc, 'center', 'bold');
+  text(ctx, game.mode === 'play' && game.rush ? 'RUSH HOUR!' : `HARI ${game.day}`, W / 2, 54, 12, game.rush ? '#ff8a5e' : '#c9a06a', 'center', 'bold');
+  // Score, combo, hearts.
+  text(ctx, fmtRp(game.score), W - 20, 26, 24, '#ffd76a', 'right', 'bold');
+  text(ctx, game.combo > 1 ? `COMBO x${game.combo}` : 'COMBO —', W - 20, 50, 13, game.combo > 1 ? '#ff9a3d' : '#c9a06a', 'right', 'bold');
+  for (let i = 0; i < 3; i++) {
+    drawHeart(ctx, W - 300 + i * 26, 30, 10, i < game.hearts ? '#ff5a6e' : '#4a2a35');
+  }
+}
+
+function drawIngredients(ctx, game) {
+  const x = 16, y = 250, w = 284, h = 396;
+  ctx.fillStyle = '#3a2415';
+  rr(ctx, x, y, w, h, 12);
+  ctx.fill();
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 2;
+  rr(ctx, x, y, w, h, 12);
+  ctx.stroke();
+  text(ctx, 'MEJA BAHAN', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
+  text(ctx, 'klik / tekan 1-4', x + w - 12, y + 20, 11, '#c9a06a', 'right', 'normal');
+  SKEWER_ORDER.forEach((id, i) => {
+    const tx = x + 14 + (i % 2) * 132;
+    const ty = y + 36 + Math.floor(i / 2) * 108;
+    const hot = game.carrying && game.carrying.kind === 'skewer' && game.carrying.id === id;
+    const hov = game.hover && game.hover.zone === 'tray' && game.hover.index === i;
+    ctx.fillStyle = hot ? '#5d3a1e' : hov ? '#4a2f1a' : '#2a1a10';
+    rr(ctx, tx, ty, 122, 98, 10);
+    ctx.fill();
+    ctx.strokeStyle = hot ? '#ffb347' : 'rgba(255,179,71,0.4)';
+    ctx.lineWidth = hot ? 3 : 1.5;
+    rr(ctx, tx, ty, 122, 98, 10);
+    ctx.stroke();
+    drawMiniSkewer(ctx, tx + 61, ty + 34, id, 10, 1.15);
+    drawMiniSkewer(ctx, tx + 61, ty + 52, id, 10, 1.15);
+    text(ctx, SKEWER_TYPES[id].name, tx + 61, ty + 76, 14, '#fff3d6', 'center', 'bold');
+    text(ctx, `${fmtRp(SKEWER_TYPES[id].price)}  ·  [${i + 1}]`, tx + 61, ty + 90, 11, '#c9a06a', 'center', 'normal');
+  });
+  text(ctx, 'SAUS — klik lalu klik piring', x + 14, y + 268, 13, '#ffb347', 'left', 'bold');
+  SAUCE_ORDER.forEach((id, i) => {
+    const bx = x + 22 + i * 88;
+    const by = y + 296;
+    const hot = game.carrying && game.carrying.kind === 'sauce' && game.carrying.id === id;
+    const hov = game.hover && game.hover.zone === 'sauce' && game.hover.index === i;
+    ctx.fillStyle = hot ? '#5d3a1e' : hov ? '#4a2f1a' : '#2a1a10';
+    ctx.beginPath();
+    ctx.arc(bx + 34, by + 22, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = SAUCES[id].color;
+    ctx.beginPath();
+    ctx.arc(bx + 34, by + 22, 22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(bx + 27, by + 14, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = hot ? '#ffb347' : 'rgba(255,179,71,0.4)';
+    ctx.lineWidth = hot ? 3 : 1.5;
+    ctx.beginPath();
+    ctx.arc(bx + 34, by + 22, 30, 0, Math.PI * 2);
+    ctx.stroke();
+    text(ctx, SAUCES[id].name, bx + 34, by + 66, 12, '#fff3d6', 'center', 'bold');
+    text(ctx, `[${['Q', 'W', 'E'][i]}]`, bx + 34, by + 82, 11, '#c9a06a', 'center', 'normal');
+  });
+}
+
+function drawGrill(ctx, game) {
+  const x = 320, y = 268, w = 640, h = 300;
+  // Chef bust behind the grill.
+  const cx = x + w / 2;
+  ctx.fillStyle = '#fff3d6';
+  ctx.beginPath();
+  ctx.arc(cx, y - 6, 30, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff3d6';
+  rr(ctx, cx - 34, y - 46, 68, 30, 12);
+  ctx.fill();
+  ctx.fillStyle = '#f2c29a';
+  ctx.beginPath();
+  ctx.arc(cx, y + 2, 24, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#1c1214';
+  ctx.beginPath();
+  ctx.arc(cx - 9, y + 0, 3, 0, Math.PI * 2);
+  ctx.arc(cx + 9, y + 0, 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#1c1214';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, y + 6, 9, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.stroke();
+  // Grill body.
+  ctx.fillStyle = '#1c1214';
+  rr(ctx, x, y + 30, w, h - 30, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#5a3a2a';
+  ctx.lineWidth = 3;
+  rr(ctx, x, y + 30, w, h - 30, 16);
+  ctx.stroke();
+  // Coal bed glow.
+  const glow = ctx.createRadialGradient(cx, y + 170, 20, cx, y + 170, 320);
+  glow.addColorStop(0, 'rgba(255,110,30,0.55)');
+  glow.addColorStop(0.6, 'rgba(255,80,20,0.18)');
+  glow.addColorStop(1, 'rgba(255,80,20,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(x + 10, y + 40, w - 20, h - 60);
+  // Coals.
+  for (let i = 0; i < 26; i++) {
+    const ex = x + 30 + ((i * 137) % (w - 60));
+    const ey = y + 120 + ((i * 89) % 120);
+    const r = 12 + ((i * 13) % 10);
+    const hot = ((i * 7) % 10) / 10;
+    ctx.fillStyle = hot > 0.6 ? '#ff7a2f' : hot > 0.3 ? '#c94a1e' : '#5a1e12';
+    ctx.beginPath();
+    ctx.arc(ex, ey, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,200,100,0.5)';
+    ctx.beginPath();
+    ctx.arc(ex - r * 0.3, ey - r * 0.3, r * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Grill bars.
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 4;
+  for (let i = 0; i < 9; i++) {
+    const bx = x + 24 + i * ((w - 48) / 8);
+    ctx.beginPath();
+    ctx.moveTo(bx, y + 52);
+    ctx.lineTo(bx, y + h - 22);
+    ctx.stroke();
+  }
+  // Smoke.
+  for (const p of game.smoke) {
+    ctx.fillStyle = `rgba(220,210,200,${p.a})`;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Embers.
+  for (const e of game.embers) {
+    ctx.fillStyle = 'rgba(255,150,60,0.9)';
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Slots.
+  for (let i = 0; i < 6; i++) {
+    const sx = x + 110 + (i % 3) * 210;
+    const sy = y + 105 + Math.floor(i / 3) * 105;
+    const slot = game.grill[i];
+    const hov = game.hover && game.hover.zone === 'grill' && game.hover.index === i;
+    if (!slot) {
+      ctx.strokeStyle = hov ? '#ffb347' : 'rgba(255,179,71,0.35)';
+      ctx.lineWidth = hov ? 3 : 2;
+      ctx.setLineDash([8, 6]);
+      rr(ctx, sx - 88, sy - 42, 176, 84, 10);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      if (hov) text(ctx, 'taruh di sini', sx, sy, 12, '#ffb347', 'center', 'bold');
+    } else {
+      drawSkewerOnGrill(ctx, sx, sy, slot);
+    }
+  }
+  text(ctx, 'PANGGANG — klik sate untuk balik / angkat', x + w / 2, y + h - 8, 12, '#c9a06a', 'center', 'bold');
+}
+
+function drawPlate(ctx, game) {
+  const x = 980, y = 250, w = 284, h = 396;
+  ctx.fillStyle = '#3a2415';
+  rr(ctx, x, y, w, h, 12);
+  ctx.fill();
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 2;
+  rr(ctx, x, y, w, h, 12);
+  ctx.stroke();
+  text(ctx, 'PIRING SAJI', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
+  // Plate.
+  const px = x + w / 2, py = y + 150;
+  ctx.fillStyle = '#fff8ea';
+  ctx.beginPath();
+  ctx.ellipse(px, py, 118, 74, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#d9b06a';
   ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.moveTo(1249, 200);
-  ctx.lineTo(1249, 184);
-  ctx.quadraticCurveTo(1249, 176, 1241, 176);
+  ctx.ellipse(px, py, 118, 74, 0, 0, Math.PI * 2);
   ctx.stroke();
-  // Cups and a kettle for colour.
-  ctx.fillStyle = '#e23b2e';
-  ctx.fillRect(1230, 300, 14, 18);
-  ctx.fillStyle = '#4da53a';
-  ctx.fillRect(1250, 300, 14, 18);
-  ctx.fillStyle = '#ffc93c';
-  ctx.fillRect(1230, 330, 14, 18);
-  ctx.fillStyle = '#3a3f44';
+  ctx.strokeStyle = 'rgba(217,176,106,0.5)';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(1248, 420, 14, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff3dc';
-  ctx.font = 'bold 11px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.save();
-  ctx.translate(1248, 520);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText('SINK • MINUM', 0, 0);
-  ctx.restore();
-}
-
-function drawIsland(ctx, state) {
-  ctx.fillStyle = PALETTE.woodDark;
-  roundRect(ctx, ISLAND.x, ISLAND.y, ISLAND.w, ISLAND.h, 8);
-  ctx.fill();
-  ctx.fillStyle = PALETTE.woodTop;
-  roundRect(ctx, ISLAND.x, ISLAND.y, ISLAND.w, 16, 8);
-  ctx.fill();
-  // Plate stack + a tomato and lettuce resting on the island.
-  for (let i = 0; i < 3; i += 1) {
-    ctx.fillStyle = i === 2 ? '#f4f8f9' : '#cfd6da';
-    ctx.beginPath();
-    ctx.ellipse(ISLAND.x + 40, ISLAND.y + 40 - i * 3, 20, 6, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  drawIngredient(ctx, 'tomato', 'raw', ISLAND.x + 130, ISLAND.y + 36, 26);
-  drawIngredient(ctx, 'lettuce', 'raw', ISLAND.x + 170, ISLAND.y + 36, 26);
-  drawIngredient(ctx, 'cheese', 'raw', ISLAND.x + 210, ISLAND.y + 36, 26);
-  ctx.fillStyle = '#fff3dc';
-  ctx.font = 'bold 12px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('MEJA SAJI', ISLAND.x + ISLAND.w / 2, ISLAND.y + ISLAND.h - 8);
-  void state;
-}
-
-// Two customers waiting at the serve pass, drawn from the open tickets
-// (visual only — no logic, no collision). Heads peek above the counter's
-// top edge into the HUD band; shoulders rest on the counter top.
-function drawWaitingCustomers(ctx, customers) {
-  const waiting = customers.slice(0, 2);
-  const spots = [
-    { x: 1055, shirt: '#2f8f7a', skin: '#f2c89b', hair: '#2b1a10', bubble: -22 },
-    { x: 1120, shirt: '#8a5fc0', skin: '#e8b88a', hair: '#5a5a5a', bubble: 22 },
-  ];
-  waiting.forEach((customer, i) => {
-    const spot = spots[i];
-    if (!spot) return;
-    void customer;
-    ctx.save();
-    // Shoulders behind the counter top edge.
-    ctx.fillStyle = spot.shirt;
-    ctx.beginPath();
-    ctx.moveTo(spot.x - 18, 80);
-    ctx.quadraticCurveTo(spot.x - 18, 56, spot.x, 56);
-    ctx.quadraticCurveTo(spot.x + 18, 56, spot.x + 18, 80);
-    ctx.closePath();
-    ctx.fill();
-    // Head + hair cap.
-    ctx.fillStyle = spot.skin;
-    ctx.beginPath();
-    ctx.arc(spot.x, 44, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = spot.hair;
-    ctx.beginPath();
-    ctx.arc(spot.x, 42, 10, Math.PI, 0);
-    ctx.fill();
-    // Eyes.
-    ctx.fillStyle = '#2b1a10';
-    ctx.beginPath();
-    ctx.arc(spot.x - 3.5, 45, 1.3, 0, Math.PI * 2);
-    ctx.arc(spot.x + 3.5, 45, 1.3, 0, Math.PI * 2);
-    ctx.fill();
-    // Little "..." bubble on the outer side of the head.
-    const bx = spot.x + spot.bubble;
-    const by = 30;
-    ctx.fillStyle = '#fff8e6';
-    ctx.beginPath();
-    ctx.arc(bx, by, 8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#6b4226';
-    ctx.beginPath();
-    ctx.arc(bx - 4, by, 1.2, 0, Math.PI * 2);
-    ctx.arc(bx, by, 1.2, 0, Math.PI * 2);
-    ctx.arc(bx + 4, by, 1.2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+  ctx.ellipse(px, py, 96, 58, 0, 0, Math.PI * 2);
+  ctx.stroke();
+  game.plate.skewers.forEach((s, i) => {
+    drawMiniSkewer(ctx, px, py - 26 + i * 26, s.type, 75, 1.05);
   });
-}
-
-// Visual only: the chef reads ~25% bigger. Collision still uses
-// CHEF_RADIUS in world.js — this scale touches pixels, not rules.
-const CHEF_DRAW_SCALE = 1.25;
-
-function drawChef(ctx, state, t) {
-  const chef = state.chef;
-  const bob = chef.moving ? Math.sin(t * 12) * 2 : 0;
-  ctx.save();
-  ctx.translate(chef.x, chef.y + bob * 0.3);
-  ctx.scale(CHEF_DRAW_SCALE, CHEF_DRAW_SCALE);
-  // Shadow.
-  ctx.fillStyle = 'rgba(0,0,0,0.25)';
-  ctx.beginPath();
-  ctx.ellipse(0, CHEF_RADIUS - 2, 22, 8, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // Body: white shirt, red apron.
-  ctx.fillStyle = '#f4f8f9';
-  ctx.beginPath();
-  ctx.arc(0, 2, CHEF_RADIUS, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#d94f3d';
-  ctx.beginPath();
-  ctx.moveTo(-13, 4);
-  ctx.quadraticCurveTo(0, 26, 13, 4);
-  ctx.lineTo(10, 18);
-  ctx.quadraticCurveTo(0, 24, -10, 18);
-  ctx.closePath();
-  ctx.fill();
-  // Face.
-  ctx.fillStyle = '#f2c89b';
-  ctx.beginPath();
-  ctx.arc(0, -8, 11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#2b1a10';
-  ctx.beginPath();
-  ctx.arc(-4 + chef.facing * 1.5, -9, 1.6, 0, Math.PI * 2);
-  ctx.arc(4 + chef.facing * 1.5, -9, 1.6, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#2b1a10';
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.arc(chef.facing * 1.5, -5, 3, 0.15 * Math.PI, 0.85 * Math.PI);
-  ctx.stroke();
-  // Chef hat.
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(-6, -18, 7, 0, Math.PI * 2);
-  ctx.arc(0, -21, 8, 0, Math.PI * 2);
-  ctx.arc(6, -18, 7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillRect(-11, -19, 22, 5);
-  // Red scarf.
-  ctx.fillStyle = '#d94f3d';
-  ctx.fillRect(-11, 3, 22, 4);
-  ctx.restore();
-  // Carried item floats above the taller hat.
-  if (state.carry) {
-    const cy = chef.y - 52 + Math.sin(t * 3) * 2;
-    if (state.carry.kind === 'plate') {
-      drawPlate(ctx, chef.x, cy, 46, state.carry.contents);
-    } else {
-      drawIngredient(ctx, state.carry.kind, state.carry.state, chef.x, cy, 30);
+  if (game.plate.sauce) {
+    ctx.fillStyle = SAUCES[game.plate.sauce].color;
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.arc(px - 60 + i * 30, py + 40, 6, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(chef.x, cy + 16, 16, 4, 0, 0, Math.PI * 2);
-    ctx.fill();
   }
-  // Chop progress ring over the chef while chopping.
-  if (state.chopping) {
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.arc(chef.x, chef.y - 38, 16, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = '#ffd34d';
-    ctx.beginPath();
-    ctx.arc(chef.x, chef.y - 38, 16, -Math.PI / 2, -Math.PI / 2 + state.chopping.progress * Math.PI * 2);
-    ctx.stroke();
+  if (game.plate.skewers.length === 0) {
+    text(ctx, 'piring kosong', px, py, 13, '#8a7a5a', 'center', 'normal');
   }
-  // Click-target marker.
-  if (chef.target) {
-    ctx.strokeStyle = 'rgba(255,211,77,0.9)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(chef.target.x, chef.target.y, 8 + Math.sin(t * 6) * 2, 0, Math.PI * 2);
-    ctx.stroke();
+  const match = game.matchingOrder();
+  // Serve button.
+  const bx = x + 22, by = y + 262, bw = w - 44, bh = 52;
+  const canServe = !!match;
+  ctx.fillStyle = canServe ? '#2e7d4a' : '#4a3a2a';
+  rr(ctx, bx, by, bw, bh, 12);
+  ctx.fill();
+  ctx.strokeStyle = canServe ? '#7ac74f' : 'rgba(255,179,71,0.35)';
+  ctx.lineWidth = canServe ? 3 : 1.5;
+  rr(ctx, bx, by, bw, bh, 12);
+  ctx.stroke();
+  text(ctx, canServe ? `✓ SAJIKAN — ${match.name}` : 'SAJIKAN  [Spasi]', bx + bw / 2, by + 26, 16, canServe ? '#eaffea' : '#c9a06a', 'center', 'bold');
+  // Trash / clear.
+  const tx = x + 22, ty = y + 326, tw = w - 44, th = 34;
+  const hovTrash = game.hover && game.hover.zone === 'trash';
+  ctx.fillStyle = hovTrash ? '#5d2a2a' : '#3a2020';
+  rr(ctx, tx, ty, tw, th, 8);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,90,90,0.5)';
+  ctx.lineWidth = 1.5;
+  rr(ctx, tx, ty, tw, th, 8);
+  ctx.stroke();
+  text(ctx, '🗑  Buang isi piring', tx + tw / 2, ty + 17, 13, '#ff9a8a', 'center', 'bold');
+  text(ctx, 'Sate matang: klik di panggangan', x + w / 2, y + 382, 11, '#c9a06a', 'center', 'normal');
+}
+
+function drawHints(ctx, game) {
+  ctx.fillStyle = 'rgba(10,5,10,0.6)';
+  ctx.fillRect(0, 656, W, 64);
+  const hints = '1-4: ambil sate   •   Q/W/E: ambil saus   •   Klik panggangan: balik / angkat   •   Spasi: sajikan   •   M: suara   •   P: jeda';
+  text(ctx, hints, W / 2, 688, 14, '#e8c98a', 'center', 'normal');
+  if (game.carrying) {
+    const label = game.carrying.kind === 'skewer'
+      ? `Membawa: sate ${SKEWER_TYPES[game.carrying.id].name} — klik slot panggangan kosong`
+      : `Membawa: saus ${SAUCES[game.carrying.id].name} — klik piring`;
+    text(ctx, label, W / 2, 660, 13, '#ffb347', 'center', 'bold');
   }
 }
 
-function drawParticles(ctx, state) {
-  for (const p of state.particles) {
-    const alpha = Math.max(0, 1 - p.t / p.life);
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
-  }
+function drawToast(ctx, game) {
+  if (!game.toast || game.now > game.toastUntil) return;
+  const a = Math.min(1, (game.toastUntil - game.now) / 0.5);
+  ctx.globalAlpha = a;
+  ctx.fillStyle = '#2a0f1a';
+  rr(ctx, W / 2 - 260, 78, 520, 34, 17);
+  ctx.fill();
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 1.5;
+  rr(ctx, W / 2 - 260, 78, 520, 34, 17);
+  ctx.stroke();
+  text(ctx, game.toast, W / 2, 96, 15, '#fff3d6', 'center', 'bold');
   ctx.globalAlpha = 1;
 }
 
-function drawFloaters(ctx, state) {
+function drawRushBanner(ctx, game) {
+  if (!game.rush || game.now > game.bannerUntil) return;
+  ctx.save();
+  ctx.translate(W / 2, 330);
+  ctx.rotate(-0.04);
+  ctx.globalAlpha = 0.95;
+  ctx.fillStyle = '#ff7a2f';
+  rr(ctx, -230, -44, 460, 88, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#fff3d6';
+  ctx.lineWidth = 3;
+  rr(ctx, -230, -44, 460, 88, 16);
+  ctx.stroke();
+  text(ctx, 'RUSH HOUR!', 0, -12, 40, '#fff3d6', 'center', 'bold');
+  text(ctx, 'Pesanan datang lebih cepat!', 0, 22, 16, '#2a0f1a', 'center', 'bold');
+  ctx.restore();
+}
+
+function drawTitle(ctx, game) {
+  ctx.fillStyle = 'rgba(10,4,12,0.72)';
+  ctx.fillRect(0, 0, W, H);
+  const cx = W / 2;
+  text(ctx, '🔥', cx, 130, 64, '#ffb347', 'center', 'bold');
+  const grad = ctx.createLinearGradient(cx - 260, 0, cx + 260, 0);
+  grad.addColorStop(0, '#ffb347');
+  grad.addColorStop(0.5, '#ff7a2f');
+  grad.addColorStop(1, '#ff5a6e');
+  ctx.fillStyle = grad;
+  ctx.font = `bold 92px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  for (const f of state.floaters) {
-    const alpha = Math.max(0, 1 - f.t / f.life);
-    ctx.globalAlpha = alpha;
-    ctx.font = 'bold 20px system-ui, sans-serif';
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    ctx.strokeText(f.text, f.x, f.y);
-    ctx.fillStyle = f.color;
-    ctx.fillText(f.text, f.x, f.y);
-  }
+  ctx.fillText('SATE BARA', cx, 215);
+  text(ctx, '— Pasar Malam Grill —', cx, 272, 24, '#fff3d6', 'center', 'bold');
+  text(ctx, 'Kamu juru sate di pasar malam. Pesanan datang dari papan —', cx, 330, 17, '#e8c98a', 'center', 'normal');
+  text(ctx, 'ambil sate di meja bahan, panggang sampai pas, beri saus,', cx, 356, 17, '#e8c98a', 'center', 'normal');
+  text(ctx, 'lalu sajikan sebelum pelanggan kabur.', cx, 382, 17, '#e8c98a', 'center', 'normal');
+  text(ctx, 'Klik / 1-4: ambil sate   •   Q/W/E: saus   •   Spasi: sajikan', cx, 440, 15, '#c9a06a', 'center', 'normal');
+  text(ctx, 'Balik sate biar matang merata — sate gosong harus dibuang!', cx, 466, 15, '#c9a06a', 'center', 'normal');
+  const pulse = 0.7 + 0.3 * Math.sin(game.now * 4);
+  ctx.globalAlpha = pulse;
+  text(ctx, 'ENTER / KLIK UNTUK MULAI', cx, 540, 26, '#ffb347', 'center', 'bold');
   ctx.globalAlpha = 1;
+  text(ctx, 'Shift 150 detik  •  3 hati  •  Combo menaikkan tip', cx, 590, 14, '#c9a06a', 'center', 'normal');
 }
 
-function drawTicket(ctx, order, index, t) {
-  const x = 8 + index * 154;
-  const y = 6;
-  const w = 148;
-  const h = 52;
-  const recipe = RECIPES[order.recipeIndex];
-  const urgent = order.patience < 10;
-  const shakeX = order.shakeT > 0 ? Math.sin(t * 40) * 3 : 0;
-  ctx.save();
-  ctx.translate(x + shakeX, y);
-  ctx.fillStyle = urgent && Math.sin(t * 8) > 0 ? '#ffe1de' : '#fff8e6';
-  roundRect(ctx, 0, 0, w, h, 6);
+function drawEnd(ctx, game) {
+  ctx.fillStyle = 'rgba(10,4,12,0.75)';
+  ctx.fillRect(0, 0, W, H);
+  const cx = W / 2;
+  ctx.fillStyle = '#fff3d6';
+  rr(ctx, cx - 300, 120, 600, 470, 20);
   ctx.fill();
-  ctx.strokeStyle = urgent ? '#e23b2e' : '#b97f3a';
-  ctx.lineWidth = urgent ? 3 : 2;
-  roundRect(ctx, 0, 0, w, h, 6);
-  ctx.stroke();
-  // Dish icon: first ingredient of the recipe.
-  drawIngredient(ctx, recipe.needs[0].id, recipe.needs[0].state, 22, 18, 26);
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#2b1a10';
-  ctx.font = 'bold 12px system-ui, sans-serif';
-  ctx.fillText(recipe.name, 40, 14);
-  ctx.fillStyle = '#6b4226';
-  ctx.font = '10px system-ui, sans-serif';
-  ctx.fillText(order.customer, 40, 29);
-  // Patience bar: green to red.
-  const frac = Math.max(0, order.patience / order.maxPatience);
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
-  ctx.fillRect(8, 40, w - 16, 6);
-  ctx.fillStyle = frac > 0.5 ? '#4da53a' : frac > 0.25 ? '#ff9f1a' : '#e23b2e';
-  ctx.fillRect(8, 40, (w - 16) * frac, 6);
-  ctx.restore();
-}
-
-function drawHud(ctx, state, t) {
-  ctx.fillStyle = PALETTE.hud;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, HUD_HEIGHT);
-  ctx.fillStyle = PALETTE.hudEdge;
-  ctx.fillRect(0, HUD_HEIGHT - 3, CANVAS_WIDTH, 3);
-  for (let i = 0; i < state.orders.length; i += 1) {
-    drawTicket(ctx, state.orders[i], i, t);
-  }
-  // Centre: shift timer + day + served.
-  const urgent = state.timeLeft <= 30;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 30px system-ui, sans-serif';
-  ctx.fillStyle = urgent ? '#ff6b5e' : '#fff3dc';
-  ctx.fillText(fmtTime(state.timeLeft), 760, 26);
-  ctx.font = '11px system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255,243,220,0.85)';
-  ctx.fillText(`HARI ${state.day}  •  TERLAYANI ${state.served}`, 760, 52);
-  // Right: hearts, coins, combo.
-  for (let i = 0; i < 3; i += 1) {
-    drawHeart(ctx, 1052 + i * 24, 18, 18, i < state.hearts);
-  }
-  ctx.textAlign = 'right';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  ctx.fillStyle = PALETTE.gold;
-  ctx.fillText(fmtCoins(state.coins), 1272, 26);
-  ctx.font = 'bold 13px system-ui, sans-serif';
-  ctx.fillStyle = state.combo >= 3 ? '#ff9f1a' : '#fff3dc';
-  ctx.fillText(state.combo > 1 ? `COMBO x${state.combo}` : 'COMBO —', 1272, 50);
-  // Mute hint, bottom right of the HUD.
-  ctx.font = '10px system-ui, sans-serif';
-  ctx.fillStyle = 'rgba(255,243,220,0.6)';
-  ctx.fillText('M: suara  •  P: jeda', 1000, 50);
-  void t;
-}
-
-function drawBanner(ctx, state) {
-  if (!state.banner) return;
-  const b = state.banner;
-  const alpha = b.t < 0.2 ? b.t / 0.2 : b.t > b.life - 0.4 ? Math.max(0, (b.life - b.t) / 0.4) : 1;
-  const scale = 1 + Math.max(0, 0.25 - b.t * 0.5);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  ctx.translate(640, 200);
-  ctx.scale(scale, scale);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = 'bold 54px system-ui, sans-serif';
-  ctx.lineWidth = 8;
-  ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-  ctx.strokeText(b.text, 0, 0);
-  ctx.fillStyle = '#ff9f1a';
-  ctx.fillText(b.text, 0, 0);
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.lineWidth = 5;
-  ctx.strokeText(b.sub, 0, 40);
-  ctx.fillStyle = '#fff3dc';
-  ctx.fillText(b.sub, 0, 40);
-  ctx.restore();
-}
-
-function drawTitle(ctx, state, t) {
-  ctx.fillStyle = 'rgba(30,18,10,0.55)';
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  const panelX = 320;
-  const panelY = 120;
-  const panelW = 640;
-  const panelH = 470;
-  ctx.fillStyle = '#fff8e6';
-  roundRect(ctx, panelX, panelY, panelW, panelH, 16);
-  ctx.fill();
-  ctx.strokeStyle = '#b97f3a';
+  ctx.strokeStyle = '#ffb347';
   ctx.lineWidth = 3;
-  roundRect(ctx, panelX, panelY, panelW, panelH, 16);
+  rr(ctx, cx - 300, 120, 600, 470, 20);
   ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#d94f3d';
-  ctx.font = 'bold 52px system-ui, sans-serif';
-  ctx.fillText('SIZZLE RUSH', 640, panelY + 58);
-  ctx.fillStyle = '#6b4226';
-  ctx.font = 'bold 26px system-ui, sans-serif';
-  ctx.fillText('— Dapur Kilat —', 640, panelY + 100);
-  ctx.fillStyle = '#2b1a10';
-  ctx.font = '15px system-ui, sans-serif';
-  const lines = [
-    'Kamu Chef Sari. Pesanan datang dari papan order —',
-    'ambil bahan di PANTRY, cincang di TALENAN,',
-    'panggang patty di GRILL, rakit di ASSEMBLY,',
-    'lalu antar ke SERVE PASS sebelum pelanggan kabur.',
-    '',
-    'WASD / panah: jalan   •   E / Spasi: interaksi',
-    'Klik stasiun: jalan ke sana   •   Q: ganti bahan',
-    'Tahan E di talenan untuk mencincang.',
-    '',
-    'Tip besar kalau pesanan cepat diantar. Combo naik',
-    'tiap antar sukses — hangus kalau ada yang gagal.',
-  ];
-  lines.forEach((line, i) => {
-    ctx.fillText(line, 640, panelY + 150 + i * 22);
-  });
-  ctx.fillStyle = '#d94f3d';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  const blink = Math.sin(t * 4) > -0.2;
-  if (blink) ctx.fillText('Tekan ENTER atau klik untuk mulai', 640, panelY + 424);
-}
-
-function drawSummary(ctx, state) {
-  ctx.fillStyle = 'rgba(30,18,10,0.6)';
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  const panelX = 380;
-  const panelY = 130;
-  const panelW = 520;
-  const panelH = 440;
-  ctx.fillStyle = '#fff8e6';
-  roundRect(ctx, panelX, panelY, panelW, panelH, 16);
-  ctx.fill();
-  ctx.strokeStyle = '#b97f3a';
-  ctx.lineWidth = 3;
-  roundRect(ctx, panelX, panelY, panelW, panelH, 16);
-  ctx.stroke();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#d94f3d';
-  ctx.font = 'bold 38px system-ui, sans-serif';
-  ctx.fillText(state.overReason === 'hearts' ? 'DAPUR KACAU!' : 'SHIFT SELESAI!', 640, panelY + 52);
-  ctx.font = '15px system-ui, sans-serif';
-  ctx.fillStyle = '#6b4226';
-  ctx.fillText(
-    state.overReason === 'hearts' ? 'Tiga pelanggan kabur — shift berakhir lebih cepat.' : `Hari ${state.day} selesai. Dapur bersih, pelanggan senang.`,
-    640, panelY + 88,
-  );
-  // Stars.
-  ctx.font = '44px system-ui, sans-serif';
-  let stars = '';
-  for (let i = 0; i < 3; i += 1) stars += i < state.stars ? '★' : '☆';
-  ctx.fillStyle = '#ffb400';
-  ctx.fillText(stars, 640, panelY + 140);
-  // Stats.
-  ctx.fillStyle = '#2b1a10';
-  ctx.font = 'bold 19px system-ui, sans-serif';
+  text(ctx, 'SHIFT SELESAI!', cx, 168, 44, '#d93a1e', 'center', 'bold');
+  text(ctx, `Hari ${game.day} selesai. Arang padam, pelanggan pulang senang.`, cx, 208, 16, '#5a3a2a', 'center', 'normal');
+  const stars = game.stars();
+  for (let i = 0; i < 3; i++) {
+    drawStar(ctx, cx - 70 + i * 70, 262, 30, i < stars ? '#ffb347' : '#d9c9a8');
+  }
   const rows = [
-    `Pesanan terlayani: ${state.served}`,
-    `Pesanan hangus: ${state.missed}`,
-    `Combo terbaik: x${state.shiftBest}`,
-    `Koin hari ini: ${fmtCoins(state.coins)}`,
+    ['Pesanan terlayani:', `${game.served}`],
+    ['Pesanan hangus:', `${game.expiredCount}`],
+    ['Sate gosong:', `${game.burntCount}`],
+    ['Combo terbaik:', `x${game.bestCombo}`],
+    ['Koin hari ini:', fmtRp(game.score)],
   ];
-  rows.forEach((row, i) => {
-    ctx.fillText(row, 640, panelY + 196 + i * 34);
+  rows.forEach((r, i) => {
+    const y = 322 + i * 34;
+    text(ctx, r[0], cx - 180, y, 17, '#5a3a2a', 'left', 'normal');
+    text(ctx, r[1], cx + 180, y, 17, '#2a1a10', 'right', 'bold');
   });
-  ctx.fillStyle = '#d94f3d';
-  ctx.font = 'bold 18px system-ui, sans-serif';
-  ctx.fillText('ENTER: Hari Berikutnya (lebih cepat!)', 640, panelY + 356);
-  ctx.fillStyle = '#6b4226';
-  ctx.font = '15px system-ui, sans-serif';
-  ctx.fillText('ESC: kembali ke judul', 640, panelY + 388);
+  const pulse = 0.7 + 0.3 * Math.sin(game.now * 4);
+  ctx.globalAlpha = pulse;
+  text(ctx, 'ENTER: Hari Berikutnya (lebih cepat!)', cx, 520, 20, '#d93a1e', 'center', 'bold');
+  ctx.globalAlpha = 1;
+  text(ctx, 'ESC: kembali ke judul', cx, 552, 14, '#5a3a2a', 'center', 'normal');
 }
 
 function drawPaused(ctx) {
-  ctx.fillStyle = 'rgba(30,18,10,0.5)';
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#fff3dc';
-  ctx.font = 'bold 44px system-ui, sans-serif';
-  ctx.fillText('JEDA — tekan P', 640, 360);
+  ctx.fillStyle = 'rgba(10,4,12,0.6)';
+  ctx.fillRect(0, 0, W, H);
+  text(ctx, 'JEDA — tekan P untuk lanjut', W / 2, H / 2, 30, '#fff3d6', 'center', 'bold');
 }
 
-export function draw(ctx, world, t) {
-  const state = world.state;
+function drawCarried(ctx, game) {
+  if (!game.carrying || !game.mouse) return;
+  const { x, y } = game.mouse;
   ctx.save();
-  if (state.shake > 0) {
-    ctx.translate((Math.random() - 0.5) * state.shake, (Math.random() - 0.5) * state.shake);
+  ctx.globalAlpha = 0.95;
+  if (game.carrying.kind === 'skewer') {
+    drawMiniSkewer(ctx, x, y, game.carrying.id, 10, 1.3);
+  } else {
+    ctx.fillStyle = SAUCES[game.carrying.id].color;
+    ctx.beginPath();
+    ctx.arc(x, y, 14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#fff3d6';
+    ctx.lineWidth = 2;
+    ctx.stroke();
   }
-  drawFloor(ctx, t);
-  drawWallDecor(ctx);
-  drawIsland(ctx, state);
-  drawTrash(ctx);
-  drawSink(ctx);
-  drawPantry(ctx, state);
-  drawTalenan(ctx, state);
-  drawGrill(ctx, state, t);
-  drawAssembly(ctx, state);
-  drawServe(ctx, state, t);
-  drawParticles(ctx, state);
-  drawChef(ctx, state, t);
-  drawFloaters(ctx, state);
-  drawHud(ctx, state, t);
-  drawWaitingCustomers(ctx, state.orders);
-  drawBanner(ctx, state);
   ctx.restore();
-  if (state.screen === SCREEN_TITLE) drawTitle(ctx, state, t);
-  if (state.screen === SCREEN_OVER) drawSummary(ctx, state);
-  if (state.paused && state.screen === SCREEN_PLAY) drawPaused(ctx);
+}
+
+export function draw(ctx, game, paused) {
+  ctx.save();
+  if (game.shake > 0) {
+    ctx.translate((Math.random() - 0.5) * game.shake * 8, (Math.random() - 0.5) * game.shake * 8);
+  }
+  drawSky(ctx, game);
+  drawStringLights(ctx, game.now);
+  drawTopBar(ctx, game);
+  drawOrderBoard(ctx, game);
+  drawCustomers(ctx, game);
+  drawIngredients(ctx, game);
+  drawGrill(ctx, game);
+  drawPlate(ctx, game);
+  drawHints(ctx, game);
+  drawToast(ctx, game);
+  drawRushBanner(ctx, game);
+  drawCarried(ctx, game);
+  if (game.mode === 'title') drawTitle(ctx, game);
+  if (game.mode === 'over') drawEnd(ctx, game);
+  if (paused && game.mode === 'play') drawPaused(ctx);
+  ctx.restore();
 }

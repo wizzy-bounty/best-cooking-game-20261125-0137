@@ -1,93 +1,88 @@
-// Tiny WebAudio synth — no sound files, no network. Every effect is a short
-// oscillator blip with an envelope; the grill sizzle is a burst of them.
-export function createAudio() {
-  const audio = {
-    ctx: null,
-    muted: false,
-  };
+// audio.js — all sounds are synthesised with WebAudio, no audio files.
+// Sizzle is filtered noise; dings and pops are short oscillators.
 
-  audio.ensure = function ensure() {
-    if (audio.ctx) {
-      if (audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
+export class Sfx {
+  constructor() {
+    this.ctx = null;
+    this.muted = false;
+    this.sizzleGain = null;
+    this.sizzleSrc = null;
+  }
+
+  ensure() {
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') this.ctx.resume();
       return;
     }
     try {
-      const Ctor = window.AudioContext || window.webkitAudioContext;
-      if (!Ctor) return;
-      audio.ctx = new Ctor();
-    } catch {
-      audio.ctx = null;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      this.ctx = new AC();
+    } catch (e) {
+      this.ctx = null;
     }
-  };
+  }
 
-  audio.blip = function blip(freq, dur, type = 'square', vol = 0.08, slideTo = null) {
-    if (audio.muted || !audio.ctx) return;
-    try {
-      const now = audio.ctx.currentTime;
-      const osc = audio.ctx.createOscillator();
-      const gain = audio.ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, now);
-      if (slideTo !== null) osc.frequency.exponentialRampToValueAtTime(slideTo, now + dur);
-      gain.gain.setValueAtTime(vol, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
-      osc.connect(gain);
-      gain.connect(audio.ctx.destination);
-      osc.start(now);
-      osc.stop(now + dur + 0.02);
-    } catch {
-      // Audio is decoration; a failure must never break the game.
+  toggleMute() {
+    this.muted = !this.muted;
+    if (this.muted) this.stopSizzle();
+    return this.muted;
+  }
+
+  blip(freq, dur, type, vol) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = type || 'sine';
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(vol || 0.12, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (dur || 0.12));
+    o.connect(g);
+    g.connect(this.ctx.destination);
+    o.start(t);
+    o.stop(t + (dur || 0.12) + 0.02);
+  }
+
+  pop() { this.blip(520, 0.07, 'triangle', 0.14); }
+  flip() { this.blip(340, 0.08, 'square', 0.07); this.blip(660, 0.06, 'triangle', 0.08); }
+  ding() { this.blip(880, 0.18, 'sine', 0.14); this.blip(1318, 0.22, 'sine', 0.09); }
+  bad() { this.blip(180, 0.25, 'sawtooth', 0.08); }
+  coin() { this.blip(988, 0.1, 'sine', 0.12); this.blip(1319, 0.16, 'sine', 0.1); }
+
+  startSizzle() {
+    if (!this.ctx || this.muted || this.sizzleSrc) return;
+    const len = this.ctx.sampleRate * 1;
+    const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.value = 5200;
+    filt.Q.value = 0.6;
+    const g = this.ctx.createGain();
+    g.gain.value = 0.045;
+    src.connect(filt);
+    filt.connect(g);
+    g.connect(this.ctx.destination);
+    src.start();
+    this.sizzleSrc = src;
+    this.sizzleGain = g;
+  }
+
+  stopSizzle() {
+    if (this.sizzleSrc) {
+      try { this.sizzleSrc.stop(); } catch (e) { /* already stopped */ }
+      this.sizzleSrc = null;
+      this.sizzleGain = null;
     }
-  };
+  }
 
-  audio.pickup = function pickup() {
-    audio.blip(520, 0.07, 'square', 0.06);
-    setTimeout(() => audio.blip(780, 0.07, 'square', 0.05), 50);
-  };
-
-  audio.chop = function chop() {
-    audio.blip(180, 0.05, 'square', 0.09, 90);
-  };
-
-  audio.chopped = function chopped() {
-    audio.blip(300, 0.06, 'triangle', 0.08);
-    setTimeout(() => audio.blip(440, 0.08, 'triangle', 0.08), 60);
-  };
-
-  audio.grill = function grill() {
-    for (let i = 0; i < 5; i += 1) {
-      setTimeout(() => audio.blip(900 + Math.random() * 600, 0.04, 'sawtooth', 0.025), i * 45);
+  setSizzleLevel(level) {
+    if (this.sizzleGain && !this.muted) {
+      this.sizzleGain.gain.value = 0.02 + 0.05 * Math.min(1, level);
     }
-  };
-
-  audio.ready = function ready() {
-    audio.blip(880, 0.1, 'sine', 0.07);
-    setTimeout(() => audio.blip(1174, 0.12, 'sine', 0.07), 90);
-  };
-
-  audio.serve = function serve() {
-    audio.blip(1046, 0.12, 'sine', 0.09);
-    setTimeout(() => audio.blip(1318, 0.16, 'sine', 0.09), 100);
-    setTimeout(() => audio.blip(1568, 0.2, 'sine', 0.07), 200);
-  };
-
-  audio.fail = function fail() {
-    audio.blip(220, 0.18, 'sawtooth', 0.08, 110);
-  };
-
-  audio.trash = function trash() {
-    audio.blip(140, 0.12, 'square', 0.07, 70);
-  };
-
-  audio.rush = function rush() {
-    audio.blip(392, 0.1, 'square', 0.08);
-    setTimeout(() => audio.blip(523, 0.1, 'square', 0.08), 110);
-    setTimeout(() => audio.blip(659, 0.16, 'square', 0.08), 220);
-  };
-
-  audio.click = function click() {
-    audio.blip(660, 0.05, 'square', 0.05);
-  };
-
-  return audio;
+  }
 }
