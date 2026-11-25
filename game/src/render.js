@@ -31,8 +31,8 @@ function fmtTime(sec) {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
-function fmtRp(n) {
-  return 'Rp ' + n.toLocaleString('id-ID');
+function fmtMoney(n) {
+  return '$' + n.toLocaleString('en-US');
 }
 
 export function drawHeart(ctx, x, y, s, color) {
@@ -230,10 +230,10 @@ function drawSkewerOnGrill(ctx, x, y, slot) {
     text(ctx, '✓', x + 62, y - 25, 12, '#12240a', 'center', 'bold');
   }
   if (slot.doneness > DONENESS.perfectMax && slot.doneness < DONENESS.burntAt) {
-    text(ctx, 'CEPAT ANGKAT!', x, y - 34, 13, '#ff8a5e', 'center', 'bold');
+    text(ctx, 'TAKE IT OFF!', x, y - 34, 13, '#ff8a5e', 'center', 'bold');
   }
   if (slot.doneness >= DONENESS.burntAt) {
-    text(ctx, 'GOSONG', x, y - 34, 13, '#ff5a2a', 'center', 'bold');
+    text(ctx, 'BURNT', x, y - 34, 13, '#ff5a2a', 'center', 'bold');
   }
 }
 
@@ -248,10 +248,10 @@ function drawOrderBoard(ctx, game) {
   ctx.lineWidth = 2;
   rr(ctx, x, y, w, h, 12);
   ctx.stroke();
-  text(ctx, 'PAPAN PESANAN', x + 16, y + 18, 15, '#ffb347', 'left', 'bold');
-  text(ctx, `${game.orders.length}/4 antre`, x + w - 14, y + 18, 12, '#e8c98a', 'right', 'normal');
+  text(ctx, 'ORDER BOARD', x + 16, y + 20, 15, '#ffb347', 'left', 'bold');
+  text(ctx, `${game.orders.length}/4 orders`, x + w - 14, y + 20, 12, '#e8c98a', 'right', 'normal');
   if (game.orders.length === 0) {
-    text(ctx, 'Belum ada pesanan — pelanggan segera datang…', x + w / 2, y + 84, 14, '#c9a06a', 'center', 'normal');
+    text(ctx, 'No orders yet — customers are on the way…', x + w / 2, y + 86, 14, '#c9a06a', 'center', 'normal');
     return;
   }
   game.orders.forEach((o, i) => {
@@ -266,19 +266,19 @@ function drawOrderBoard(ctx, game) {
     ctx.fill();
     text(ctx, o.name, x + 40, ty + 13, 13, '#2a1a10', 'left', 'bold');
     o.skewers.forEach((s, k) => {
-      drawMiniSkewer(ctx, x + 168 + k * 40, ty + 13, s, 70, 0.55);
+      drawMiniSkewer(ctx, x + 160 + k * 39, ty + 13, s, 70, 0.55);
     });
     if (o.sauce) {
       ctx.fillStyle = SAUCES[o.sauce].color;
       ctx.beginPath();
-      ctx.arc(x + 168 + o.skewers.length * 40 + 8, ty + 13, 7, 0, Math.PI * 2);
+      ctx.arc(x + 160 + o.skewers.length * 39 + 6, ty + 13, 7, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = 'rgba(0,0,0,0.4)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
-    text(ctx, fmtRp(o.price), x + w - 62, ty + 13, 12, '#2a1a10', 'right', 'bold');
-    const pw = 44;
+    text(ctx, fmtMoney(o.price), x + w - 64, ty + 13, 12, '#2a1a10', 'right', 'bold');
+    const pw = 42;
     ctx.fillStyle = 'rgba(0,0,0,0.25)';
     rr(ctx, x + w - 56, ty + 4, pw, 5, 2);
     ctx.fill();
@@ -290,14 +290,14 @@ function drawOrderBoard(ctx, game) {
 
 function drawCustomers(ctx, game) {
   const x = 860, y = 76, w = 404, h = 158;
-  ctx.fillStyle = 'rgba(20,10,20,0.55)';
+  ctx.fillStyle = '#3a2415';
   rr(ctx, x, y, w, h, 12);
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,179,71,0.5)';
+  ctx.strokeStyle = '#ffb347';
   ctx.lineWidth = 2;
   rr(ctx, x, y, w, h, 12);
   ctx.stroke();
-  text(ctx, 'PELANGGAN MENUNGGU', x + 16, y + 18, 15, '#ffb347', 'left', 'bold');
+  text(ctx, 'CUSTOMERS', x + 16, y + 20, 15, '#ffb347', 'left', 'bold');
   game.customerSlots.forEach((c, i) => {
     const cx = x + 70 + i * 135;
     const cy = y + 78;
@@ -330,8 +330,8 @@ function drawCustomers(ctx, game) {
     text(ctx, c.name, cx, y + 138, 13, '#fff3d6', 'center', 'bold');
   });
   const waiting = game.orders.length;
-  drawHeart(ctx, x + w - 30, y + 18, 9, waiting > 0 ? '#ff5a6e' : '#5a3a4a');
-  text(ctx, `${waiting} pesanan`, x + w - 48, y + 18, 12, '#e8c98a', 'right', 'normal');
+  drawHeart(ctx, x + w - 30, y + 20, 9, waiting > 0 ? '#ff5a6e' : '#5a3a4a');
+  text(ctx, `${waiting} orders`, x + w - 48, y + 20, 12, '#e8c98a', 'right', 'normal');
 }
 
 function drawTopBar(ctx, game) {
@@ -341,17 +341,17 @@ function drawTopBar(ctx, game) {
   ctx.fillRect(0, 64, W, 3);
   // Title.
   text(ctx, '🔥 SATE BARA', 20, 34, 26, '#ffb347', 'left', 'bold');
-  text(ctx, 'Pasar Malam Grill', 244, 36, 14, '#e8c98a', 'left', 'normal');
+  text(ctx, 'Night Market Grill', 244, 34, 14, '#e8c98a', 'left', 'normal');
   // Timer.
   const low = game.mode === 'play' && game.timeLeft <= 30;
   const tc = low ? (Math.sin(game.now * 8) > 0 ? '#ff5a2a' : '#fff3d6') : '#fff3d6';
   text(ctx, fmtTime(game.timeLeft), W / 2, 30, 34, tc, 'center', 'bold');
-  text(ctx, game.mode === 'play' && game.rush ? 'RUSH HOUR!' : `HARI ${game.day}`, W / 2, 54, 12, game.rush ? '#ff8a5e' : '#c9a06a', 'center', 'bold');
+  text(ctx, game.mode === 'play' && game.rush ? 'RUSH HOUR!' : `DAY ${game.day}`, W / 2, 54, 12, game.rush ? '#ff8a5e' : '#c9a06a', 'center', 'bold');
   // Score, combo, hearts.
-  text(ctx, fmtRp(game.score), W - 20, 26, 24, '#ffd76a', 'right', 'bold');
+  text(ctx, fmtMoney(game.score), W - 20, 26, 24, '#ffd76a', 'right', 'bold');
   text(ctx, game.combo > 1 ? `COMBO x${game.combo}` : 'COMBO —', W - 20, 50, 13, game.combo > 1 ? '#ff9a3d' : '#c9a06a', 'right', 'bold');
   for (let i = 0; i < 3; i++) {
-    drawHeart(ctx, W - 300 + i * 26, 30, 10, i < game.hearts ? '#ff5a6e' : '#4a2a35');
+    drawHeart(ctx, W - 232 + i * 26, 30, 10, i < game.hearts ? '#ff5a6e' : '#4a2a35');
   }
 }
 
@@ -364,8 +364,8 @@ function drawIngredients(ctx, game) {
   ctx.lineWidth = 2;
   rr(ctx, x, y, w, h, 12);
   ctx.stroke();
-  text(ctx, 'MEJA BAHAN', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
-  text(ctx, 'klik / tekan 1-4', x + w - 12, y + 20, 11, '#c9a06a', 'right', 'normal');
+  text(ctx, 'INGREDIENTS', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
+  text(ctx, 'click / keys 1-4', x + w - 12, y + 20, 11, '#c9a06a', 'right', 'normal');
   SKEWER_ORDER.forEach((id, i) => {
     const tx = x + 14 + (i % 2) * 132;
     const ty = y + 36 + Math.floor(i / 2) * 108;
@@ -378,12 +378,12 @@ function drawIngredients(ctx, game) {
     ctx.lineWidth = hot ? 3 : 1.5;
     rr(ctx, tx, ty, 122, 98, 10);
     ctx.stroke();
-    drawMiniSkewer(ctx, tx + 61, ty + 34, id, 10, 1.15);
-    drawMiniSkewer(ctx, tx + 61, ty + 52, id, 10, 1.15);
-    text(ctx, SKEWER_TYPES[id].name, tx + 61, ty + 76, 14, '#fff3d6', 'center', 'bold');
-    text(ctx, `${fmtRp(SKEWER_TYPES[id].price)}  ·  [${i + 1}]`, tx + 61, ty + 90, 11, '#c9a06a', 'center', 'normal');
+    drawMiniSkewer(ctx, tx + 61, ty + 28, id, 10, 1.15);
+    drawMiniSkewer(ctx, tx + 61, ty + 45, id, 10, 1.15);
+    text(ctx, SKEWER_TYPES[id].name, tx + 61, ty + 70, 14, '#fff3d6', 'center', 'bold');
+    text(ctx, `${fmtMoney(SKEWER_TYPES[id].price)}  ·  [${i + 1}]`, tx + 61, ty + 86, 11, '#c9a06a', 'center', 'normal');
   });
-  text(ctx, 'SAUS — klik lalu klik piring', x + 14, y + 268, 13, '#ffb347', 'left', 'bold');
+  text(ctx, 'SAUCES — click, then click the plate', x + 14, y + 268, 13, '#ffb347', 'left', 'bold');
   SAUCE_ORDER.forEach((id, i) => {
     const bx = x + 22 + i * 88;
     const by = y + 296;
@@ -451,12 +451,14 @@ function drawGrill(ctx, game) {
   glow.addColorStop(1, 'rgba(255,80,20,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(x + 10, y + 40, w - 20, h - 60);
-  // Coals.
-  for (let i = 0; i < 26; i++) {
-    const ex = x + 30 + ((i * 137) % (w - 60));
-    const ey = y + 120 + ((i * 89) % 120);
-    const r = 12 + ((i * 13) % 10);
+  // Coals: small, evenly spaced embers tucked between the slot rows so
+  // the skewers and their meters stay readable.
+  for (let i = 0; i < 24; i++) {
+    const ex = x + 44 + (i % 12) * 50;
+    const ey = y + 158 + Math.floor(i / 12) * 106;
+    const r = 6 + ((i * 5) % 4);
     const hot = ((i * 7) % 10) / 10;
+    ctx.globalAlpha = 0.55;
     ctx.fillStyle = hot > 0.6 ? '#ff7a2f' : hot > 0.3 ? '#c94a1e' : '#5a1e12';
     ctx.beginPath();
     ctx.arc(ex, ey, r, 0, Math.PI * 2);
@@ -465,6 +467,7 @@ function drawGrill(ctx, game) {
     ctx.beginPath();
     ctx.arc(ex - r * 0.3, ey - r * 0.3, r * 0.35, 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
   }
   // Grill bars.
   ctx.strokeStyle = 'rgba(0,0,0,0.6)';
@@ -496,6 +499,10 @@ function drawGrill(ctx, game) {
     const sy = y + 105 + Math.floor(i / 3) * 105;
     const slot = game.grill[i];
     const hov = game.hover && game.hover.zone === 'grill' && game.hover.index === i;
+    // A quiet well behind every slot keeps the six positions aligned.
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    rr(ctx, sx - 88, sy - 42, 176, 84, 10);
+    ctx.fill();
     if (!slot) {
       ctx.strokeStyle = hov ? '#ffb347' : 'rgba(255,179,71,0.35)';
       ctx.lineWidth = hov ? 3 : 2;
@@ -503,12 +510,12 @@ function drawGrill(ctx, game) {
       rr(ctx, sx - 88, sy - 42, 176, 84, 10);
       ctx.stroke();
       ctx.setLineDash([]);
-      if (hov) text(ctx, 'taruh di sini', sx, sy, 12, '#ffb347', 'center', 'bold');
+      if (hov) text(ctx, 'drop here', sx, sy, 12, '#ffb347', 'center', 'bold');
     } else {
       drawSkewerOnGrill(ctx, sx, sy, slot);
     }
   }
-  text(ctx, 'PANGGANG — klik sate untuk balik / angkat', x + w / 2, y + h - 8, 12, '#c9a06a', 'center', 'bold');
+  text(ctx, 'GRILL — click a skewer to flip / remove', x + w / 2, y + h - 8, 12, '#c9a06a', 'center', 'bold');
 }
 
 function drawPlate(ctx, game) {
@@ -520,7 +527,7 @@ function drawPlate(ctx, game) {
   ctx.lineWidth = 2;
   rr(ctx, x, y, w, h, 12);
   ctx.stroke();
-  text(ctx, 'PIRING SAJI', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
+  text(ctx, 'SERVING PLATE', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
   // Plate.
   const px = x + w / 2, py = y + 150;
   ctx.fillStyle = '#fff8ea';
@@ -538,7 +545,7 @@ function drawPlate(ctx, game) {
   ctx.ellipse(px, py, 96, 58, 0, 0, Math.PI * 2);
   ctx.stroke();
   game.plate.skewers.forEach((s, i) => {
-    drawMiniSkewer(ctx, px, py - 26 + i * 26, s.type, 75, 1.05);
+    drawMiniSkewer(ctx, px, py - 28 + i * 28, s.type, 75, 1.3);
   });
   if (game.plate.sauce) {
     ctx.fillStyle = SAUCES[game.plate.sauce].color;
@@ -549,7 +556,7 @@ function drawPlate(ctx, game) {
     }
   }
   if (game.plate.skewers.length === 0) {
-    text(ctx, 'piring kosong', px, py, 13, '#8a7a5a', 'center', 'normal');
+    text(ctx, 'empty plate', px, py, 13, '#8a7a5a', 'center', 'normal');
   }
   const match = game.matchingOrder();
   // Serve button.
@@ -562,7 +569,7 @@ function drawPlate(ctx, game) {
   ctx.lineWidth = canServe ? 3 : 1.5;
   rr(ctx, bx, by, bw, bh, 12);
   ctx.stroke();
-  text(ctx, canServe ? `✓ SAJIKAN — ${match.name}` : 'SAJIKAN  [Spasi]', bx + bw / 2, by + 26, 16, canServe ? '#eaffea' : '#c9a06a', 'center', 'bold');
+  text(ctx, canServe ? `✓ SERVE — ${match.name}` : 'SERVE  [Space]', bx + bw / 2, by + 26, 16, canServe ? '#eaffea' : '#c9a06a', 'center', 'bold');
   // Trash / clear.
   const tx = x + 22, ty = y + 326, tw = w - 44, th = 34;
   const hovTrash = game.hover && game.hover.zone === 'trash';
@@ -573,20 +580,20 @@ function drawPlate(ctx, game) {
   ctx.lineWidth = 1.5;
   rr(ctx, tx, ty, tw, th, 8);
   ctx.stroke();
-  text(ctx, '🗑  Buang isi piring', tx + tw / 2, ty + 17, 13, '#ff9a8a', 'center', 'bold');
-  text(ctx, 'Sate matang: klik di panggangan', x + w / 2, y + 382, 11, '#c9a06a', 'center', 'normal');
+  text(ctx, '🗑  Clear plate', tx + tw / 2, ty + 17, 13, '#ff9a8a', 'center', 'bold');
+  text(ctx, 'Click a cooked skewer to plate it', x + w / 2, y + 382, 11, '#c9a06a', 'center', 'normal');
 }
 
 function drawHints(ctx, game) {
   ctx.fillStyle = 'rgba(10,5,10,0.6)';
   ctx.fillRect(0, 656, W, 64);
-  const hints = '1-4: ambil sate   •   Q/W/E: ambil saus   •   Klik panggangan: balik / angkat   •   Spasi: sajikan   •   M: suara   •   P: jeda';
-  text(ctx, hints, W / 2, 688, 14, '#e8c98a', 'center', 'normal');
+  const hints = '1-4: pick skewer   •   Q/W/E: sauce   •   Click grill: flip / remove   •   Space: serve   •   M: sound   •   P: pause';
+  text(ctx, hints, W / 2, 694, 14, '#e8c98a', 'center', 'normal');
   if (game.carrying) {
     const label = game.carrying.kind === 'skewer'
-      ? `Membawa: sate ${SKEWER_TYPES[game.carrying.id].name} — klik slot panggangan kosong`
-      : `Membawa: saus ${SAUCES[game.carrying.id].name} — klik piring`;
-    text(ctx, label, W / 2, 660, 13, '#ffb347', 'center', 'bold');
+      ? `Carrying: ${SKEWER_TYPES[game.carrying.id].name} skewer — click an empty grill slot`
+      : `Carrying: ${SAUCES[game.carrying.id].name} sauce — click the plate`;
+    text(ctx, label, W / 2, 668, 13, '#ffb347', 'center', 'bold');
   }
 }
 
@@ -619,35 +626,43 @@ function drawRushBanner(ctx, game) {
   rr(ctx, -230, -44, 460, 88, 16);
   ctx.stroke();
   text(ctx, 'RUSH HOUR!', 0, -12, 40, '#fff3d6', 'center', 'bold');
-  text(ctx, 'Pesanan datang lebih cepat!', 0, 22, 16, '#2a0f1a', 'center', 'bold');
+  text(ctx, 'Orders are coming faster!', 0, 22, 16, '#2a0f1a', 'center', 'bold');
   ctx.restore();
 }
 
 function drawTitle(ctx, game) {
-  ctx.fillStyle = 'rgba(10,4,12,0.72)';
+  ctx.fillStyle = 'rgba(10,4,12,0.78)';
   ctx.fillRect(0, 0, W, H);
   const cx = W / 2;
-  text(ctx, '🔥', cx, 130, 64, '#ffb347', 'center', 'bold');
+  // One calm card holds the whole title block, clear of the stall behind it.
+  ctx.fillStyle = 'rgba(24,10,20,0.92)';
+  rr(ctx, cx - 400, 92, 800, 520, 20);
+  ctx.fill();
+  ctx.strokeStyle = '#ffb347';
+  ctx.lineWidth = 2;
+  rr(ctx, cx - 400, 92, 800, 520, 20);
+  ctx.stroke();
+  text(ctx, '🔥', cx, 150, 56, '#ffb347', 'center', 'bold');
   const grad = ctx.createLinearGradient(cx - 260, 0, cx + 260, 0);
   grad.addColorStop(0, '#ffb347');
   grad.addColorStop(0.5, '#ff7a2f');
   grad.addColorStop(1, '#ff5a6e');
   ctx.fillStyle = grad;
-  ctx.font = `bold 92px ${FONT}`;
+  ctx.font = `bold 88px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('SATE BARA', cx, 215);
-  text(ctx, '— Pasar Malam Grill —', cx, 272, 24, '#fff3d6', 'center', 'bold');
-  text(ctx, 'Kamu juru sate di pasar malam. Pesanan datang dari papan —', cx, 330, 17, '#e8c98a', 'center', 'normal');
-  text(ctx, 'ambil sate di meja bahan, panggang sampai pas, beri saus,', cx, 356, 17, '#e8c98a', 'center', 'normal');
-  text(ctx, 'lalu sajikan sebelum pelanggan kabur.', cx, 382, 17, '#e8c98a', 'center', 'normal');
-  text(ctx, 'Klik / 1-4: ambil sate   •   Q/W/E: saus   •   Spasi: sajikan', cx, 440, 15, '#c9a06a', 'center', 'normal');
-  text(ctx, 'Balik sate biar matang merata — sate gosong harus dibuang!', cx, 466, 15, '#c9a06a', 'center', 'normal');
+  ctx.fillText('SATE BARA', cx, 228);
+  text(ctx, '— Night Market Grill —', cx, 284, 24, '#fff3d6', 'center', 'bold');
+  text(ctx, 'You run the sate stall at the night market.', cx, 344, 17, '#e8c98a', 'center', 'normal');
+  text(ctx, 'Take an order, grill each skewer just right, add sauce,', cx, 370, 17, '#e8c98a', 'center', 'normal');
+  text(ctx, 'and serve it before the customer walks away.', cx, 396, 17, '#e8c98a', 'center', 'normal');
+  text(ctx, 'Click / 1-4: pick skewer   •   Q/W/E: sauce   •   Space: serve', cx, 452, 15, '#c9a06a', 'center', 'normal');
+  text(ctx, 'Flip skewers for an even cook — burnt ones go in the trash!', cx, 478, 15, '#c9a06a', 'center', 'normal');
   const pulse = 0.7 + 0.3 * Math.sin(game.now * 4);
   ctx.globalAlpha = pulse;
-  text(ctx, 'ENTER / KLIK UNTUK MULAI', cx, 540, 26, '#ffb347', 'center', 'bold');
+  text(ctx, 'ENTER / CLICK TO START', cx, 540, 26, '#ffb347', 'center', 'bold');
   ctx.globalAlpha = 1;
-  text(ctx, 'Shift 150 detik  •  3 hati  •  Combo menaikkan tip', cx, 590, 14, '#c9a06a', 'center', 'normal');
+  text(ctx, '150-second shift  •  3 hearts  •  Combos raise your tips', cx, 580, 14, '#c9a06a', 'center', 'normal');
 }
 
 function drawEnd(ctx, game) {
@@ -661,35 +676,43 @@ function drawEnd(ctx, game) {
   ctx.lineWidth = 3;
   rr(ctx, cx - 300, 120, 600, 470, 20);
   ctx.stroke();
-  text(ctx, 'SHIFT SELESAI!', cx, 168, 44, '#d93a1e', 'center', 'bold');
-  text(ctx, `Hari ${game.day} selesai. Arang padam, pelanggan pulang senang.`, cx, 208, 16, '#5a3a2a', 'center', 'normal');
+  text(ctx, 'SHIFT COMPLETE!', cx, 168, 44, '#d93a1e', 'center', 'bold');
+  text(ctx, `Day ${game.day} is done. The coals are out, the crowd went home happy.`, cx, 208, 16, '#5a3a2a', 'center', 'normal');
   const stars = game.stars();
   for (let i = 0; i < 3; i++) {
     drawStar(ctx, cx - 70 + i * 70, 262, 30, i < stars ? '#ffb347' : '#d9c9a8');
   }
   const rows = [
-    ['Pesanan terlayani:', `${game.served}`],
-    ['Pesanan hangus:', `${game.expiredCount}`],
-    ['Sate gosong:', `${game.burntCount}`],
-    ['Combo terbaik:', `x${game.bestCombo}`],
-    ['Koin hari ini:', fmtRp(game.score)],
+    ['Orders served:', `${game.served}`],
+    ['Orders expired:', `${game.expiredCount}`],
+    ['Skewers burnt:', `${game.burntCount}`],
+    ['Best combo:', `x${game.bestCombo}`],
+    ['Coins earned:', fmtMoney(game.score)],
   ];
   rows.forEach((r, i) => {
     const y = 322 + i * 34;
+    if (i > 0) {
+      ctx.strokeStyle = 'rgba(90,58,42,0.18)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(cx - 190, y - 17);
+      ctx.lineTo(cx + 190, y - 17);
+      ctx.stroke();
+    }
     text(ctx, r[0], cx - 180, y, 17, '#5a3a2a', 'left', 'normal');
     text(ctx, r[1], cx + 180, y, 17, '#2a1a10', 'right', 'bold');
   });
   const pulse = 0.7 + 0.3 * Math.sin(game.now * 4);
   ctx.globalAlpha = pulse;
-  text(ctx, 'ENTER: Hari Berikutnya (lebih cepat!)', cx, 520, 20, '#d93a1e', 'center', 'bold');
+  text(ctx, 'ENTER: Next Day (faster!)', cx, 520, 20, '#d93a1e', 'center', 'bold');
   ctx.globalAlpha = 1;
-  text(ctx, 'ESC: kembali ke judul', cx, 552, 14, '#5a3a2a', 'center', 'normal');
+  text(ctx, 'ESC: back to title', cx, 552, 14, '#5a3a2a', 'center', 'normal');
 }
 
 function drawPaused(ctx) {
   ctx.fillStyle = 'rgba(10,4,12,0.6)';
   ctx.fillRect(0, 0, W, H);
-  text(ctx, 'JEDA — tekan P untuk lanjut', W / 2, H / 2, 30, '#fff3d6', 'center', 'bold');
+  text(ctx, 'PAUSED — press P to resume', W / 2, H / 2, 30, '#fff3d6', 'center', 'bold');
 }
 
 function drawCarried(ctx, game) {

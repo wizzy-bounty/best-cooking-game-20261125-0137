@@ -35,8 +35,8 @@ export function stageShot(name, game) {
   if (name === 'start') {
     // Title screen over a quiet stall: two orders waiting on the board.
     game.orders = [
-      makeOrder(game, 'Bu Ratna', '#c94f6d', ['ayam', 'ayam'], 'kacang', 0.92),
-      makeOrder(game, 'Bang Dedi', '#2e7d6b', ['sapi'], 'kecap', 0.78),
+      makeOrder(game, 'Ratna', '#c94f6d', ['ayam', 'ayam'], 'kacang', 0.92),
+      makeOrder(game, 'Dedi', '#2e7d6b', ['sapi'], 'kecap', 0.78),
     ];
     game.mode = 'title';
     return 'start';
@@ -53,9 +53,9 @@ export function stageShot(name, game) {
     game.pickUp('sauce', 'kacang');
     game.applySauceToPlate();
     game.orders = [
-      makeOrder(game, 'Bu Ratna', '#c94f6d', ['ayam'], 'kacang', 0.88),
-      makeOrder(game, 'Bang Dedi', '#2e7d6b', ['sapi', 'sapi'], 'kecap', 0.64),
-      makeOrder(game, 'Kak Putri', '#e8a13a', ['kambing', 'tahu'], null, 0.45),
+      makeOrder(game, 'Ratna', '#c94f6d', ['ayam'], 'kacang', 0.88),
+      makeOrder(game, 'Dedi', '#2e7d6b', ['sapi', 'sapi'], 'kecap', 0.64),
+      makeOrder(game, 'Putri', '#e8a13a', ['kambing', 'tahu'], null, 0.45),
     ];
     game.timeLeft = 72;
     game.score = 343;
@@ -81,10 +81,10 @@ export function stageShot(name, game) {
     ];
     game.plate.sauce = 'sambal';
     game.orders = [
-      makeOrder(game, 'Bu Ratna', '#c94f6d', ['ayam', 'ayam'], 'kacang', 0.7),
-      makeOrder(game, 'Bang Dedi', '#2e7d6b', ['sapi'], null, 0.55),
-      makeOrder(game, 'Kak Putri', '#e8a13a', ['kambing', 'tahu', 'tahu'], 'sambal', 0.38),
-      makeOrder(game, 'Pak Budi', '#4a6fa5', ['ayam', 'sapi'], 'kecap', 0.22),
+      makeOrder(game, 'Ratna', '#c94f6d', ['ayam', 'ayam'], 'kacang', 0.7),
+      makeOrder(game, 'Dedi', '#2e7d6b', ['sapi'], null, 0.55),
+      makeOrder(game, 'Putri', '#e8a13a', ['kambing', 'tahu', 'tahu'], 'sambal', 0.38),
+      makeOrder(game, 'Budi', '#4a6fa5', ['ayam', 'sapi'], 'kecap', 0.22),
     ];
     game.timeLeft = 47;
     game.score = 1240;

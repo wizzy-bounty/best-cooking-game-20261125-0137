@@ -145,7 +145,7 @@ export class Game {
       if (!this.rushAnnounced) {
         this.rushAnnounced = true;
         this.bannerUntil = this.now + 3;
-        this.say('RUSH HOUR! Pesanan datang lebih cepat!');
+        this.say('RUSH HOUR! Orders are coming faster!');
         if (this.sfx) this.sfx.ding();
       }
     }
@@ -167,7 +167,7 @@ export class Game {
         this.expiredCount++;
         this.combo = 0;
         this.hearts--;
-        this.say(`Pesanan ${o.name} hangus!`);
+        this.say(`${o.name}'s order expired!`);
         if (this.sfx) this.sfx.bad();
         if (this.hearts <= 0) this.endDay();
       }
@@ -222,12 +222,12 @@ export class Game {
       this.grill[index] = null;
       this.burntCount++;
       this.combo = 0;
-      this.say('Gosong! Dibuang ke tempat sampah.');
+      this.say('Burnt! Tossed in the trash.');
       if (this.sfx) this.sfx.bad();
       return true;
     }
     if (slot.doneness < 25) {
-      this.say('Masih mentah — panggang dulu!');
+      this.say('Still raw — grill it first!');
       return false;
     }
     this.grill[index] = null;
@@ -239,7 +239,7 @@ export class Game {
   applySauceToPlate() {
     if (!this.carrying || this.carrying.kind !== 'sauce') return false;
     if (this.plate.skewers.length === 0) {
-      this.say('Taruh sate di piring dulu!');
+      this.say('Put a skewer on the plate first!');
       return false;
     }
     this.plate.sauce = this.carrying.id;
@@ -268,7 +268,7 @@ export class Game {
   serve() {
     const order = this.matchingOrder();
     if (!order) {
-      this.say('Belum cocok — cek papan pesanan!');
+      this.say('No match yet — check the order board!');
       this.shake = 1;
       if (this.sfx) this.sfx.bad();
       return false;
@@ -282,7 +282,7 @@ export class Game {
     this.served++;
     this.orders = this.orders.filter((o) => o.id !== order.id);
     this.plate = { skewers: [], sauce: null };
-    this.say(allPerfect ? `Sempurna! +Rp ${earned} (tip Rp ${tip})` : `Terlayani! +Rp ${earned}`);
+    this.say(allPerfect ? `Perfect! +$${earned} (tip $${tip})` : `Served! +$${earned}`);
     if (this.sfx) this.sfx.coin();
     return true;
   }

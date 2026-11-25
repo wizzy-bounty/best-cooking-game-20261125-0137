@@ -1,7 +1,7 @@
 // input.js — mouse and keyboard for Sate Bara. Click zones mirror the
 // panels render.js draws: trays, sauce bowls, grill slots, plate, serve,
-// trash and the order board. Keyboard: 1-4 sate, Q/W/E saus, Spasi sajikan,
-// F balik, M suara, P jeda, Enter mulai, Esc batal.
+// trash and the order board. Keyboard: 1-4 skewers, Q/W/E sauces, Space
+// serve, F flip, M sound, P pause, Enter start, Esc cancel.
 
 import { SKEWER_ORDER, SAUCE_ORDER } from './data.js';
 
@@ -103,9 +103,9 @@ export function attachInput(game, canvas, sfx, ui) {
       game.pickUp('sauce', SAUCE_ORDER[z.index]);
     } else if (z.zone === 'grill') {
       if (game.carrying && game.carrying.kind === 'skewer') {
-        if (!game.placeOnGrill(z.index)) game.say('Slot panggangan penuh!');
+        if (!game.placeOnGrill(z.index)) game.say('That grill slot is full!');
       } else if (game.carrying && game.carrying.kind === 'sauce') {
-        game.say('Saus untuk piring, bukan panggangan!');
+        game.say('Sauce goes on the plate, not the grill!');
       } else {
         game.takeOffGrill(z.index);
       }
@@ -113,14 +113,14 @@ export function attachInput(game, canvas, sfx, ui) {
       if (game.carrying && game.carrying.kind === 'sauce') {
         game.applySauceToPlate();
       } else if (game.carrying && game.carrying.kind === 'skewer') {
-        game.say('Sate harus dipanggang dulu!');
+        game.say('Grill the skewer first!');
       }
     } else if (z.zone === 'serve' || z.zone === 'ticket') {
       game.serve();
     } else if (z.zone === 'trash') {
       if (game.plate.skewers.length > 0 || game.plate.sauce) {
         game.clearPlate();
-        game.say('Piring dikosongkan.');
+        game.say('Plate cleared.');
       }
     }
   });
@@ -152,7 +152,7 @@ export function attachInput(game, canvas, sfx, ui) {
     }
     if (e.code === 'KeyM') {
       const muted = sfx.toggleMute();
-      game.say(muted ? 'Suara mati.' : 'Suara hidup.');
+      game.say(muted ? 'Sound off.' : 'Sound on.');
       return;
     }
     if (e.code === 'KeyP') {
