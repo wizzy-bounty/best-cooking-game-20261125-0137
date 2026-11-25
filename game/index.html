@@ -1,40 +1,38 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="icon" href="data:,">
-<title>SATE BARA — Night Market Grill</title>
-<style>
-  html, body { margin: 0; padding: 0; background: #150a1e; overflow: hidden; }
-  body {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    font-family: 'Trebuchet MS', 'Segoe UI', Verdana, sans-serif;
-    color: #fff3d6;
-  }
-  canvas {
-    width: min(1280px, 100vw);
-    height: auto;
-    display: block;
-    background: #241019;
-    image-rendering: auto;
-    cursor: pointer;
-  }
-  #status {
-    margin-top: 10px;
-    font-size: 14px;
-    opacity: 0.85;
-    text-align: center;
-  }
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
+  <title>SATE BARA: Night Market Grill</title>
+  <style>
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: #120d1d;
+    }
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100vh;
+      overflow: hidden;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    canvas {
+      position: fixed;
+      inset: 0;
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      background: #171226;
+      cursor: pointer;
+      touch-action: manipulation;
+      user-select: none;
+    }
+  </style>
 </head>
 <body>
-<canvas id="game" width="1280" height="720"></canvas>
-<div id="status">Loading the night market…</div>
-<script type="module" src="./src/main.js"></script>
+  <canvas id="game" width="1280" height="720" aria-label="SATE BARA night market grill game"></canvas>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>

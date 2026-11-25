@@ -1,758 +1,837 @@
-// render.js — every pixel of Sate Bara is drawn here on one canvas:
-// a night market at dusk, string lights, a glowing charcoal grill, smoke,
-// an order board, ingredient trays and a plate ready to serve.
+import { SAUCES, SKEWERS, VIEW, clamp, sauceById, skewerById } from './data.js';
+import { getHint, slotStatus } from './state.js';
 
-import { SKEWER_TYPES, SAUCES, SKEWER_ORDER, SAUCE_ORDER, DONENESS } from './data.js';
+const W = VIEW.width;
+const H = VIEW.height;
+const ORIGIN = { x: 620, y: 104 };
+const HW = 48;
+const HH = 24;
+const ZH = 36;
+const COLS = 12;
+const ROWS = 8;
 
-export const W = 1280;
-export const H = 720;
-const FONT = `'Trebuchet MS','Segoe UI',Verdana,sans-serif`;
+const CRATE_WORLD = [
+  { x: 0.0, y: 5.45 },
+  { x: 1.0, y: 5.45 },
+  { x: 0.0, y: 6.6 },
+  { x: 1.0, y: 6.6 },
+];
 
-export function rr(ctx, x, y, w, h, r) {
+const BUTTONS = {
+  start: { x: 440, y: 468, w: 400, h: 58, label: 'Start Shift' },
+  resume: { x: 470, y: 382, w: 340, h: 54, label: 'Resume' },
+  restartPause: { x: 470, y: 450, w: 340, h: 54, label: 'Restart Shift' },
+  again: { x: 460, y: 498, w: 360, h: 56, label: 'Play Again' },
+  pause: { x: 1136, y: 656, w: 112, h: 40, label: 'Pause' },
+  restart: { x: 1012, y: 656, w: 112, h: 40, label: 'Restart' },
+};
+
+const CUSTOMER_COLORS = ['#d64535', '#2a9d8f', '#e9c46a', '#7b5ea7'];
+const SKIN_TONES = ['#f2c49b', '#c68642', '#8d5524', '#ffdbac'];
+
+function iso(x, y, z = 0) {
+  return { x: ORIGIN.x + (x - y) * HW, y: ORIGIN.y + (x + y) * HH - z * ZH };
+}
+
+function slotPos(index) {
+  return iso(4.15 + index * 0.92, 3.45, 0.78);
+}
+
+function cratePos(id) {
+  const index = Math.max(0, SKEWERS.findIndex((item) => item.id === id));
+  const world = CRATE_WORLD[index];
+  return iso(world.x + 0.5, world.y + 0.45, 0.48);
+}
+
+function saucePos(id) {
+  const base = iso(10.55, 2.4, 0.62);
+  if (id === 'peanut') return { x: base.x - 40, y: base.y - 12 };
+  if (id === 'soy') return { x: base.x, y: base.y + 10 };
+  if (id === 'chili') return { x: base.x + 40, y: base.y - 12 };
+  return platePos();
+}
+
+function platePos() {
+  return iso(10.1, 4.45, 0.58);
+}
+
+function customerPos(index) {
+  return iso(3.8 + index * 1.7, 6.7, 0);
+}
+
+function chefPos() {
+  return iso(6.35, 1.85, 0);
+}
+
+function rectAround(point, w, h) {
+  return { x: point.x - w / 2, y: point.y - h / 2, w, h };
+}
+
+export function getZones(state) {
+  const zones = [];
+  if (state.mode === 'playing') {
+    for (const item of SKEWERS) {
+      zones.push({ id: `ingredient:${item.id}`, kind: 'ingredient', value: item.id, shape: 'rect', ...rectAround(cratePos(item.id), 116, 96) });
+    }
+    for (let i = 0; i < 6; i++) {
+      zones.push({ id: `slot:${i}`, kind: 'slot', value: i, shape: 'rect', ...rectAround(slotPos(i), 80, 62) });
+    }
+    for (const sauce of SAUCES.slice(0, 3)) {
+      const p = saucePos(sauce.id);
+      zones.push({ id: `sauce:${sauce.id}`, kind: 'sauce', value: sauce.id, shape: 'circle', x: p.x, y: p.y, r: 34 });
+    }
+    zones.push({ id: 'plate', kind: 'plate', value: 'plate', shape: 'rect', ...rectAround(platePos(), 132, 84) });
+    for (let i = 0; i < 4; i++) {
+      const p = customerPos(i);
+      zones.push({ id: `customer:${i}`, kind: 'customer', value: i, shape: 'rect', x: p.x - 58, y: p.y - 148, w: 116, h: 190 });
+    }
+    zones.push({ id: 'button:restart', kind: 'button', value: 'restart', shape: 'rect', ...BUTTONS.restart });
+    zones.push({ id: 'button:pause', kind: 'button', value: 'pause', shape: 'rect', ...BUTTONS.pause });
+  }
+  if (state.mode === 'title') zones.push({ id: 'button:start', kind: 'button', value: 'start', shape: 'rect', ...BUTTONS.start });
+  if (state.mode === 'paused') {
+    zones.push({ id: 'button:resume', kind: 'button', value: 'resume', shape: 'rect', ...BUTTONS.resume });
+    zones.push({ id: 'button:restart', kind: 'button', value: 'restart', shape: 'rect', ...BUTTONS.restartPause });
+  }
+  if (state.mode === 'complete') zones.push({ id: 'button:again', kind: 'button', value: 'again', shape: 'rect', ...BUTTONS.again });
+  return zones;
+}
+
+function rr(ctx, x, y, w, h, r) {
+  const radius = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius, y + h);
+  ctx.lineTo(x + radius, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius);
+  ctx.lineTo(x, y + radius);
+  ctx.quadraticCurveTo(x, y, x + radius, y);
   ctx.closePath();
 }
 
-function text(ctx, s, x, y, size, color, align, weight) {
-  ctx.fillStyle = color;
-  ctx.font = `${weight || 'bold'} ${size}px ${FONT}`;
-  ctx.textAlign = align || 'center';
+function fillRR(ctx, x, y, w, h, r, fill) {
+  rr(ctx, x, y, w, h, r);
+  ctx.fillStyle = fill;
+  ctx.fill();
+}
+
+function strokeRR(ctx, x, y, w, h, r, stroke, width = 2) {
+  rr(ctx, x, y, w, h, r);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = width;
+  ctx.stroke();
+}
+
+function poly(ctx, points, fill, stroke = null, width = 1) {
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+}
+
+function ellipse(ctx, x, y, rx, ry, fill, stroke = null) {
+  ctx.beginPath();
+  ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+}
+
+function text(ctx, value, x, y, size, color, align = 'center', weight = 700) {
+  ctx.font = `${weight} ${size}px Arial, Helvetica, sans-serif`;
+  ctx.textAlign = align;
   ctx.textBaseline = 'middle';
-  ctx.fillText(s, x, y);
-}
-
-function fmtTime(sec) {
-  const s = Math.max(0, Math.ceil(sec));
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
-}
-
-function fmtMoney(n) {
-  return '$' + n.toLocaleString('en-US');
-}
-
-export function drawHeart(ctx, x, y, s, color) {
   ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(x, y + s * 0.35);
-  ctx.bezierCurveTo(x - s, y - s * 0.45, x - s * 0.45, y - s, x, y - s * 0.35);
-  ctx.bezierCurveTo(x + s * 0.45, y - s, x + s, y - s * 0.45, x, y + s * 0.35);
-  ctx.closePath();
-  ctx.fill();
+  ctx.fillText(value, x, y);
 }
 
-function drawStar(ctx, x, y, r, color) {
-  ctx.fillStyle = color;
+function tag(ctx, value, x, y, bg, fg = '#ffffff') {
+  ctx.font = '700 11px Arial, Helvetica, sans-serif';
+  const w = Math.ceil(ctx.measureText(value).width) + 16;
+  fillRR(ctx, x - w / 2, y - 10, w, 20, 10, bg);
+  text(ctx, value, x, y + 0.5, 11, fg);
+}
+
+function shadow(ctx, x, y, rx, ry, alpha = 0.2) {
+  ellipse(ctx, x, y, rx, ry, `rgba(0,0,0,${alpha})`);
+}
+
+function box(ctx, x, y, w, d, h, colors, z0 = 0) {
+  const center = iso(x + w / 2, y + d / 2, z0);
+  shadow(ctx, center.x, center.y + 8, (w + d) * 24, (w + d) * 11, 0.18);
+  const a = iso(x, y, z0 + h);
+  const b = iso(x + w, y, z0 + h);
+  const c = iso(x + w, y + d, z0 + h);
+  const dpt = iso(x, y + d, z0 + h);
+  const b0 = iso(x + w, y, z0);
+  const c0 = iso(x + w, y + d, z0);
+  const d0 = iso(x, y + d, z0);
+  poly(ctx, [dpt, c, c0, d0], colors.left, 'rgba(0,0,0,0.22)');
+  poly(ctx, [b, c, c0, b0], colors.right, 'rgba(0,0,0,0.22)');
+  poly(ctx, [a, b, c, dpt], colors.top, 'rgba(0,0,0,0.25)');
+  return { a, b, c, d: dpt, center: iso(x + w / 2, y + d / 2, z0 + h) };
+}
+
+function topDiamond(ctx, x, y, w, d, z, fill, stroke = null) {
+  poly(ctx, [iso(x, y, z), iso(x + w, y, z), iso(x + w, y + d, z), iso(x, y + d, z)], fill, stroke);
+}
+
+function cylinder(ctx, x, y, rx, ry, h, side, top) {
+  ctx.fillStyle = side;
+  ctx.fillRect(x - rx, y, rx * 2, h);
+  ellipse(ctx, x, y + h, rx, ry, side);
+  ellipse(ctx, x, y, rx, ry, top, 'rgba(0,0,0,0.2)');
+}
+
+function mix(hexA, hexB, t) {
+  const a = parseInt(hexA.slice(1), 16);
+  const b = parseInt(hexB.slice(1), 16);
+  const r = Math.round(((a >> 16) & 255) + (((b >> 16) & 255) - ((a >> 16) & 255)) * t);
+  const g = Math.round(((a >> 8) & 255) + (((b >> 8) & 255) - ((a >> 8) & 255)) * t);
+  const bl = Math.round((a & 255) + ((b & 255) - (a & 255)) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+function donenessColor(item, slot) {
+  if (!slot || !slot.skewer) return item.raw;
+  if (slot.progress >= 1) return item.burnt;
+  let color = slot.progress < 0.5 ? mix(item.raw, item.mid, slot.progress * 2) : mix(item.mid, item.cooked, (slot.progress - 0.5) * 2);
+  if (!slot.flipped && slot.progress > 0.68) color = mix(item.cooked, item.burnt, clamp((slot.progress - 0.68) * 1.4, 0, 0.65));
+  return color;
+}
+
+function pseudo(n) {
+  const v = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+function drawSkewerIcon(ctx, x, y, skewerId, scale = 1, slot = null, angle = -0.32) {
+  const item = skewerById(skewerId);
+  const color = donenessColor(item, slot);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.strokeStyle = '#d9b77c';
+  ctx.lineWidth = 3 * scale;
   ctx.beginPath();
-  for (let i = 0; i < 10; i++) {
-    const rad = i % 2 === 0 ? r : r * 0.45;
-    const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const px = x + Math.cos(a) * rad;
-    const py = y + Math.sin(a) * rad;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
+  ctx.moveTo(-34 * scale, 0);
+  ctx.lineTo(38 * scale, 0);
+  ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    const cx = (-20 + i * 13) * scale;
+    ellipse(ctx, cx, 0, 8 * scale, 6.5 * scale, color, 'rgba(0,0,0,0.18)');
+    ellipse(ctx, cx - 2 * scale, -2 * scale, 2.4 * scale, 1.6 * scale, 'rgba(255,255,255,0.35)');
   }
-  ctx.closePath();
-  ctx.fill();
+  ctx.restore();
 }
 
-// ---------- background ----------
-
-function drawSky(ctx, game) {
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#150a2a');
-  g.addColorStop(0.45, '#3a1a30');
-  g.addColorStop(0.75, '#6b2d1e');
-  g.addColorStop(1, '#2a1410');
-  ctx.fillStyle = g;
+function drawBackground(ctx, state) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, H);
+  gradient.addColorStop(0, '#171226');
+  gradient.addColorStop(0.42, '#24162b');
+  gradient.addColorStop(1, '#2a160f');
+  ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, W, H);
-  // Stars.
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  for (let i = 0; i < 60; i++) {
-    const x = (i * 173) % W;
-    const y = (i * 97) % 150;
-    ctx.globalAlpha = 0.25 + ((i * 7) % 10) / 16;
-    ctx.fillRect(x, y, 2, 2);
-  }
-  ctx.globalAlpha = 1;
-  // Distant stall silhouettes with warm windows.
-  const stalls = [[60, 150, 150], [280, 130, 170], [980, 140, 160], [1140, 120, 130]];
-  for (const [x, w, h] of stalls) {
-    ctx.fillStyle = '#1e0e1e';
-    ctx.fillRect(x, 250 - h, w, h);
+
+  ctx.fillStyle = 'rgba(255,209,102,0.10)';
+  ellipse(ctx, 640, 330, 560, 250, 'rgba(255,170,80,0.08)');
+
+  ctx.fillStyle = '#1d142b';
+  for (let i = 0; i < 11; i++) {
+    const x = i * 128 - 20;
+    const h = 54 + pseudo(i + 3) * 44;
+    ctx.fillRect(x, 150 - h, 96, h);
     ctx.beginPath();
-    ctx.moveTo(x - 10, 250 - h);
-    ctx.lineTo(x + w / 2, 250 - h - 26);
-    ctx.lineTo(x + w + 10, 250 - h);
+    ctx.moveTo(x - 8, 150 - h);
+    ctx.lineTo(x + 48, 122 - h);
+    ctx.lineTo(x + 104, 150 - h);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#ffb347';
-    ctx.globalAlpha = 0.85;
-    ctx.fillRect(x + 18, 250 - h + 34, 26, 22);
-    ctx.fillRect(x + w - 48, 250 - h + 34, 26, 22);
-    ctx.globalAlpha = 1;
   }
-  // Ground planks.
-  ctx.fillStyle = '#241019';
-  ctx.fillRect(0, 250, W, H - 250);
-  ctx.strokeStyle = 'rgba(255,179,71,0.10)';
-  ctx.lineWidth = 2;
-  for (let y = 300; y < H; y += 52) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
+  for (let i = 0; i < 42; i++) {
+    const x = pseudo(i * 3 + 1) * W;
+    const y = 104 + pseudo(i * 5 + 2) * 58;
+    ellipse(ctx, x, y, 2.2, 2.2, i % 3 === 0 ? 'rgba(255,209,102,0.55)' : 'rgba(255,255,255,0.28)');
   }
-  void game;
+
+  shadow(ctx, 190, 612, 120, 22, 0.22);
+  shadow(ctx, 1090, 612, 130, 24, 0.22);
+  cylinder(ctx, 190, 540, 18, 7, 58, '#3b2418', '#5b3820');
+  cylinder(ctx, 1090, 540, 18, 7, 58, '#3b2418', '#5b3820');
+  ellipse(ctx, 190, 528, 28, 34, 'rgba(255,154,60,0.28)');
+  ellipse(ctx, 1090, 528, 28, 34, 'rgba(255,154,60,0.28)');
+  ellipse(ctx, 190, 528, 13, 18, '#ffd166');
+  ellipse(ctx, 1090, 528, 13, 18, '#ffd166');
+  if (state.rushTimer > 0) ellipse(ctx, 640, 330, 520, 230, 'rgba(255,122,47,0.05)');
 }
 
-function drawStringLights(ctx, t) {
-  const rows = [
-    { y0: 8, y1: 70, sag: 34 },
-    { y0: 30, y1: 96, sag: 30 },
-  ];
-  const cols = ['#ffb347', '#ff6a5e', '#ffe08a', '#ff9a3d'];
-  for (const row of rows) {
-    ctx.strokeStyle = 'rgba(20,10,20,0.9)';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(0, row.y0);
-    ctx.quadraticCurveTo(W / 2, row.y0 + row.sag * 2, W, row.y1);
-    ctx.stroke();
-    for (let i = 0; i < 22; i++) {
-      const u = i / 21;
-      const x = u * W;
-      const y = (1 - u) * (1 - u) * row.y0 + 2 * (1 - u) * u * (row.y0 + row.sag * 2) + u * u * row.y1;
-      const c = cols[i % cols.length];
-      const flick = 0.75 + 0.25 * Math.sin(t * 2 + i * 1.7);
-      const glow = ctx.createRadialGradient(x, y + 8, 1, x, y + 8, 16);
-      glow.addColorStop(0, c);
-      glow.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.globalAlpha = flick * 0.8;
-      ctx.fillStyle = glow;
-      ctx.beginPath();
-      ctx.arc(x, y + 8, 16, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = c;
-      ctx.beginPath();
-      ctx.arc(x, y + 8, 4.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-}
+function drawFloor(ctx) {
+  const board = [iso(0, 0), iso(COLS, 0), iso(COLS, ROWS), iso(0, ROWS)];
+  poly(ctx, board.map((p) => ({ x: p.x, y: p.y + 20 })), 'rgba(0,0,0,0.28)');
 
-// ---------- food drawing ----------
-
-export function drawMiniSkewer(ctx, x, y, type, doneness, scale) {
-  const s = scale || 1;
-  const t = SKEWER_TYPES[type];
-  const col = doneness === undefined ? t.raw : donenessColor(t, doneness);
-  ctx.strokeStyle = '#e8c98a';
-  ctx.lineWidth = 3 * s;
-  ctx.beginPath();
-  ctx.moveTo(x - 26 * s, y);
-  ctx.lineTo(x + 26 * s, y);
-  ctx.stroke();
-  for (let i = -1; i <= 1; i++) {
-    ctx.fillStyle = col;
-    rr(ctx, x + i * 15 * s - 7 * s, y - 7 * s, 14 * s, 14 * s, 3 * s);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.25)';
-    rr(ctx, x + i * 15 * s - 7 * s, y - 7 * s, 14 * s, 5 * s, 3 * s);
-    ctx.fill();
-  }
-}
-
-function donenessColor(t, d) {
-  if (d < 30) return t.raw;
-  if (d < 60) return t.mid;
-  if (d < DONENESS.burntAt) return t.done;
-  return '#241610';
-}
-
-function drawSkewerOnGrill(ctx, x, y, slot) {
-  const t = SKEWER_TYPES[slot.type];
-  const col = donenessColor(t, slot.doneness);
-  // Char glow under the skewer.
-  const glow = ctx.createRadialGradient(x, y + 6, 4, x, y + 6, 70);
-  glow.addColorStop(0, 'rgba(255,122,47,0.35)');
-  glow.addColorStop(1, 'rgba(255,122,47,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(x - 70, y - 40, 140, 90);
-  // Stick.
-  ctx.strokeStyle = '#d9a05b';
-  ctx.lineWidth = 5;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x - 78, y);
-  ctx.lineTo(x + 78, y);
-  ctx.stroke();
-  // Meat cubes.
-  for (let i = -1; i <= 1; i++) {
-    const cx = x + i * 42;
-    ctx.fillStyle = col;
-    rr(ctx, cx - 17, y - 15, 34, 30, 7);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.28)';
-    rr(ctx, cx - 17, y - 15, 34, 10, 7);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-    ctx.lineWidth = 2;
-    rr(ctx, cx - 17, y - 15, 34, 30, 7);
-    ctx.stroke();
-  }
-  // Doneness meter.
-  const mw = 110;
-  const mx = x - mw / 2;
-  const my = y + 26;
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  rr(ctx, mx - 2, my - 2, mw + 4, 10, 5);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(122,199,79,0.35)';
-  const zx = mx + (DONENESS.perfectMin / 100) * mw;
-  const zw = ((DONENESS.perfectMax - DONENESS.perfectMin) / 100) * mw;
-  rr(ctx, zx, my, zw, 6, 3);
-  ctx.fill();
-  const d = Math.min(100, slot.doneness);
-  ctx.fillStyle = d >= DONENESS.burntAt ? '#1c1c1c' : d > DONENESS.perfectMax ? '#ff5a2a' : '#ffb347';
-  rr(ctx, mx, my, Math.max(4, (d / 100) * mw), 6, 3);
-  ctx.fill();
-  if (slot.flipped) {
-    ctx.fillStyle = '#7ac74f';
-    ctx.beginPath();
-    ctx.arc(x + 62, y - 26, 9, 0, Math.PI * 2);
-    ctx.fill();
-    text(ctx, '✓', x + 62, y - 25, 12, '#12240a', 'center', 'bold');
-  }
-  if (slot.doneness > DONENESS.perfectMax && slot.doneness < DONENESS.burntAt) {
-    text(ctx, 'TAKE IT OFF!', x, y - 34, 13, '#ff8a5e', 'center', 'bold');
-  }
-  if (slot.doneness >= DONENESS.burntAt) {
-    text(ctx, 'BURNT', x, y - 34, 13, '#ff5a2a', 'center', 'bold');
-  }
-}
-
-// ---------- panels ----------
-
-function drawOrderBoard(ctx, game) {
-  const x = 16, y = 76, w = 420, h = 158;
-  ctx.fillStyle = '#3a2415';
-  rr(ctx, x, y, w, h, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 2;
-  rr(ctx, x, y, w, h, 12);
-  ctx.stroke();
-  text(ctx, 'ORDER BOARD', x + 16, y + 20, 15, '#ffb347', 'left', 'bold');
-  text(ctx, `${game.orders.length}/4 orders`, x + w - 14, y + 20, 12, '#e8c98a', 'right', 'normal');
-  if (game.orders.length === 0) {
-    text(ctx, 'No orders yet — customers are on the way…', x + w / 2, y + 86, 14, '#c9a06a', 'center', 'normal');
-    return;
-  }
-  game.orders.forEach((o, i) => {
-    const ty = y + 36 + i * 30;
-    const match = game.plateMatches(o);
-    ctx.fillStyle = match ? '#2e5d3a' : '#fff3d6';
-    rr(ctx, x + 10, ty, w - 20, 26, 6);
-    ctx.fill();
-    ctx.fillStyle = o.color;
-    ctx.beginPath();
-    ctx.arc(x + 26, ty + 13, 8, 0, Math.PI * 2);
-    ctx.fill();
-    text(ctx, o.name, x + 40, ty + 13, 13, '#2a1a10', 'left', 'bold');
-    o.skewers.forEach((s, k) => {
-      drawMiniSkewer(ctx, x + 160 + k * 39, ty + 13, s, 70, 0.55);
-    });
-    if (o.sauce) {
-      ctx.fillStyle = SAUCES[o.sauce].color;
-      ctx.beginPath();
-      ctx.arc(x + 160 + o.skewers.length * 39 + 6, ty + 13, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    }
-    text(ctx, fmtMoney(o.price), x + w - 64, ty + 13, 12, '#2a1a10', 'right', 'bold');
-    const pw = 42;
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    rr(ctx, x + w - 56, ty + 4, pw, 5, 2);
-    ctx.fill();
-    ctx.fillStyle = o.patience > 0.5 ? '#7ac74f' : o.patience > 0.25 ? '#ffb347' : '#ff5a2a';
-    rr(ctx, x + w - 56, ty + 4, Math.max(3, pw * o.patience), 5, 2);
-    ctx.fill();
-  });
-}
-
-function drawCustomers(ctx, game) {
-  const x = 860, y = 76, w = 404, h = 158;
-  ctx.fillStyle = '#3a2415';
-  rr(ctx, x, y, w, h, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 2;
-  rr(ctx, x, y, w, h, 12);
-  ctx.stroke();
-  text(ctx, 'CUSTOMERS', x + 16, y + 20, 15, '#ffb347', 'left', 'bold');
-  game.customerSlots.forEach((c, i) => {
-    const cx = x + 70 + i * 135;
-    const cy = y + 78;
-    // Body.
-    ctx.fillStyle = c.shirt;
-    rr(ctx, cx - 42, cy + 18, 84, 52, 14);
-    ctx.fill();
-    // Head.
-    ctx.fillStyle = c.skin;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 34, 0, Math.PI * 2);
-    ctx.fill();
-    // Hair.
-    ctx.fillStyle = c.hair;
-    ctx.beginPath();
-    ctx.arc(cx, cy - 8, 34, Math.PI, Math.PI * 2);
-    ctx.fill();
-    ctx.fillRect(cx - 34, cy - 12, 68, 10);
-    // Eyes + smile.
-    ctx.fillStyle = '#1c1214';
-    ctx.beginPath();
-    ctx.arc(cx - 12, cy + 2, 4, 0, Math.PI * 2);
-    ctx.arc(cx + 12, cy + 2, 4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#1c1214';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(cx, cy + 8, 11, 0.15 * Math.PI, 0.85 * Math.PI);
-    ctx.stroke();
-    text(ctx, c.name, cx, y + 138, 13, '#fff3d6', 'center', 'bold');
-  });
-  const waiting = game.orders.length;
-  drawHeart(ctx, x + w - 30, y + 20, 9, waiting > 0 ? '#ff5a6e' : '#5a3a4a');
-  text(ctx, `${waiting} orders`, x + w - 48, y + 20, 12, '#e8c98a', 'right', 'normal');
-}
-
-function drawTopBar(ctx, game) {
-  ctx.fillStyle = '#2a0f1a';
-  ctx.fillRect(0, 0, W, 64);
-  ctx.fillStyle = '#ffb347';
-  ctx.fillRect(0, 64, W, 3);
-  // Title.
-  text(ctx, '🔥 SATE BARA', 20, 34, 26, '#ffb347', 'left', 'bold');
-  text(ctx, 'Night Market Grill', 244, 34, 14, '#e8c98a', 'left', 'normal');
-  // Timer.
-  const low = game.mode === 'play' && game.timeLeft <= 30;
-  const tc = low ? (Math.sin(game.now * 8) > 0 ? '#ff5a2a' : '#fff3d6') : '#fff3d6';
-  text(ctx, fmtTime(game.timeLeft), W / 2, 30, 34, tc, 'center', 'bold');
-  text(ctx, game.mode === 'play' && game.rush ? 'RUSH HOUR!' : `DAY ${game.day}`, W / 2, 54, 12, game.rush ? '#ff8a5e' : '#c9a06a', 'center', 'bold');
-  // Score, combo, hearts.
-  text(ctx, fmtMoney(game.score), W - 20, 26, 24, '#ffd76a', 'right', 'bold');
-  text(ctx, game.combo > 1 ? `COMBO x${game.combo}` : 'COMBO —', W - 20, 50, 13, game.combo > 1 ? '#ff9a3d' : '#c9a06a', 'right', 'bold');
-  for (let i = 0; i < 3; i++) {
-    drawHeart(ctx, W - 232 + i * 26, 30, 10, i < game.hearts ? '#ff5a6e' : '#4a2a35');
-  }
-}
-
-function drawIngredients(ctx, game) {
-  const x = 16, y = 250, w = 284, h = 396;
-  ctx.fillStyle = '#3a2415';
-  rr(ctx, x, y, w, h, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 2;
-  rr(ctx, x, y, w, h, 12);
-  ctx.stroke();
-  text(ctx, 'INGREDIENTS', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
-  text(ctx, 'click / keys 1-4', x + w - 12, y + 20, 11, '#c9a06a', 'right', 'normal');
-  SKEWER_ORDER.forEach((id, i) => {
-    const tx = x + 14 + (i % 2) * 132;
-    const ty = y + 36 + Math.floor(i / 2) * 108;
-    const hot = game.carrying && game.carrying.kind === 'skewer' && game.carrying.id === id;
-    const hov = game.hover && game.hover.zone === 'tray' && game.hover.index === i;
-    ctx.fillStyle = hot ? '#5d3a1e' : hov ? '#4a2f1a' : '#2a1a10';
-    rr(ctx, tx, ty, 122, 98, 10);
-    ctx.fill();
-    ctx.strokeStyle = hot ? '#ffb347' : 'rgba(255,179,71,0.4)';
-    ctx.lineWidth = hot ? 3 : 1.5;
-    rr(ctx, tx, ty, 122, 98, 10);
-    ctx.stroke();
-    drawMiniSkewer(ctx, tx + 61, ty + 28, id, 10, 1.15);
-    drawMiniSkewer(ctx, tx + 61, ty + 45, id, 10, 1.15);
-    text(ctx, SKEWER_TYPES[id].name, tx + 61, ty + 70, 14, '#fff3d6', 'center', 'bold');
-    text(ctx, `${fmtMoney(SKEWER_TYPES[id].price)}  ·  [${i + 1}]`, tx + 61, ty + 86, 11, '#c9a06a', 'center', 'normal');
-  });
-  text(ctx, 'SAUCES — click, then click the plate', x + 14, y + 268, 13, '#ffb347', 'left', 'bold');
-  SAUCE_ORDER.forEach((id, i) => {
-    const bx = x + 22 + i * 88;
-    const by = y + 296;
-    const hot = game.carrying && game.carrying.kind === 'sauce' && game.carrying.id === id;
-    const hov = game.hover && game.hover.zone === 'sauce' && game.hover.index === i;
-    ctx.fillStyle = hot ? '#5d3a1e' : hov ? '#4a2f1a' : '#2a1a10';
-    ctx.beginPath();
-    ctx.arc(bx + 34, by + 22, 30, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = SAUCES[id].color;
-    ctx.beginPath();
-    ctx.arc(bx + 34, by + 22, 22, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    ctx.arc(bx + 27, by + 14, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = hot ? '#ffb347' : 'rgba(255,179,71,0.4)';
-    ctx.lineWidth = hot ? 3 : 1.5;
-    ctx.beginPath();
-    ctx.arc(bx + 34, by + 22, 30, 0, Math.PI * 2);
-    ctx.stroke();
-    text(ctx, SAUCES[id].name, bx + 34, by + 66, 12, '#fff3d6', 'center', 'bold');
-    text(ctx, `[${['Q', 'W', 'E'][i]}]`, bx + 34, by + 82, 11, '#c9a06a', 'center', 'normal');
-  });
-}
-
-function drawGrill(ctx, game) {
-  const x = 320, y = 268, w = 640, h = 300;
-  // Chef bust behind the grill.
-  const cx = x + w / 2;
-  ctx.fillStyle = '#fff3d6';
-  ctx.beginPath();
-  ctx.arc(cx, y - 6, 30, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff3d6';
-  rr(ctx, cx - 34, y - 46, 68, 30, 12);
-  ctx.fill();
-  ctx.fillStyle = '#f2c29a';
-  ctx.beginPath();
-  ctx.arc(cx, y + 2, 24, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1c1214';
-  ctx.beginPath();
-  ctx.arc(cx - 9, y + 0, 3, 0, Math.PI * 2);
-  ctx.arc(cx + 9, y + 0, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#1c1214';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx, y + 6, 9, 0.15 * Math.PI, 0.85 * Math.PI);
-  ctx.stroke();
-  // Grill body.
-  ctx.fillStyle = '#1c1214';
-  rr(ctx, x, y + 30, w, h - 30, 16);
-  ctx.fill();
-  ctx.strokeStyle = '#5a3a2a';
-  ctx.lineWidth = 3;
-  rr(ctx, x, y + 30, w, h - 30, 16);
-  ctx.stroke();
-  // Coal bed glow.
-  const glow = ctx.createRadialGradient(cx, y + 170, 20, cx, y + 170, 320);
-  glow.addColorStop(0, 'rgba(255,110,30,0.55)');
-  glow.addColorStop(0.6, 'rgba(255,80,20,0.18)');
-  glow.addColorStop(1, 'rgba(255,80,20,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(x + 10, y + 40, w - 20, h - 60);
-  // Coals: small, evenly spaced embers tucked between the slot rows so
-  // the skewers and their meters stay readable.
-  for (let i = 0; i < 24; i++) {
-    const ex = x + 44 + (i % 12) * 50;
-    const ey = y + 158 + Math.floor(i / 12) * 106;
-    const r = 6 + ((i * 5) % 4);
-    const hot = ((i * 7) % 10) / 10;
-    ctx.globalAlpha = 0.55;
-    ctx.fillStyle = hot > 0.6 ? '#ff7a2f' : hot > 0.3 ? '#c94a1e' : '#5a1e12';
-    ctx.beginPath();
-    ctx.arc(ex, ey, r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,200,100,0.5)';
-    ctx.beginPath();
-    ctx.arc(ex - r * 0.3, ey - r * 0.3, r * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-  // Grill bars.
-  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-  ctx.lineWidth = 4;
-  for (let i = 0; i < 9; i++) {
-    const bx = x + 24 + i * ((w - 48) / 8);
-    ctx.beginPath();
-    ctx.moveTo(bx, y + 52);
-    ctx.lineTo(bx, y + h - 22);
-    ctx.stroke();
-  }
-  // Smoke.
-  for (const p of game.smoke) {
-    ctx.fillStyle = `rgba(220,210,200,${p.a})`;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Embers.
-  for (const e of game.embers) {
-    ctx.fillStyle = 'rgba(255,150,60,0.9)';
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Slots.
-  for (let i = 0; i < 6; i++) {
-    const sx = x + 110 + (i % 3) * 210;
-    const sy = y + 105 + Math.floor(i / 3) * 105;
-    const slot = game.grill[i];
-    const hov = game.hover && game.hover.zone === 'grill' && game.hover.index === i;
-    // A quiet well behind every slot keeps the six positions aligned.
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    rr(ctx, sx - 88, sy - 42, 176, 84, 10);
-    ctx.fill();
-    if (!slot) {
-      ctx.strokeStyle = hov ? '#ffb347' : 'rgba(255,179,71,0.35)';
-      ctx.lineWidth = hov ? 3 : 2;
-      ctx.setLineDash([8, 6]);
-      rr(ctx, sx - 88, sy - 42, 176, 84, 10);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      if (hov) text(ctx, 'drop here', sx, sy, 12, '#ffb347', 'center', 'bold');
-    } else {
-      drawSkewerOnGrill(ctx, sx, sy, slot);
-    }
-  }
-  text(ctx, 'GRILL — click a skewer to flip / remove', x + w / 2, y + h - 8, 12, '#c9a06a', 'center', 'bold');
-}
-
-function drawPlate(ctx, game) {
-  const x = 980, y = 250, w = 284, h = 396;
-  ctx.fillStyle = '#3a2415';
-  rr(ctx, x, y, w, h, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 2;
-  rr(ctx, x, y, w, h, 12);
-  ctx.stroke();
-  text(ctx, 'SERVING PLATE', x + 14, y + 20, 15, '#ffb347', 'left', 'bold');
-  // Plate.
-  const px = x + w / 2, py = y + 150;
-  ctx.fillStyle = '#fff8ea';
-  ctx.beginPath();
-  ctx.ellipse(px, py, 118, 74, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = '#d9b06a';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.ellipse(px, py, 118, 74, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(217,176,106,0.5)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.ellipse(px, py, 96, 58, 0, 0, Math.PI * 2);
-  ctx.stroke();
-  game.plate.skewers.forEach((s, i) => {
-    drawMiniSkewer(ctx, px, py - 28 + i * 28, s.type, 75, 1.3);
-  });
-  if (game.plate.sauce) {
-    ctx.fillStyle = SAUCES[game.plate.sauce].color;
-    for (let i = 0; i < 5; i++) {
-      ctx.beginPath();
-      ctx.arc(px - 60 + i * 30, py + 40, 6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  if (game.plate.skewers.length === 0) {
-    text(ctx, 'empty plate', px, py, 13, '#8a7a5a', 'center', 'normal');
-  }
-  const match = game.matchingOrder();
-  // Serve button.
-  const bx = x + 22, by = y + 262, bw = w - 44, bh = 52;
-  const canServe = !!match;
-  ctx.fillStyle = canServe ? '#2e7d4a' : '#4a3a2a';
-  rr(ctx, bx, by, bw, bh, 12);
-  ctx.fill();
-  ctx.strokeStyle = canServe ? '#7ac74f' : 'rgba(255,179,71,0.35)';
-  ctx.lineWidth = canServe ? 3 : 1.5;
-  rr(ctx, bx, by, bw, bh, 12);
-  ctx.stroke();
-  text(ctx, canServe ? `✓ SERVE — ${match.name}` : 'SERVE  [Space]', bx + bw / 2, by + 26, 16, canServe ? '#eaffea' : '#c9a06a', 'center', 'bold');
-  // Trash / clear.
-  const tx = x + 22, ty = y + 326, tw = w - 44, th = 34;
-  const hovTrash = game.hover && game.hover.zone === 'trash';
-  ctx.fillStyle = hovTrash ? '#5d2a2a' : '#3a2020';
-  rr(ctx, tx, ty, tw, th, 8);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(255,90,90,0.5)';
-  ctx.lineWidth = 1.5;
-  rr(ctx, tx, ty, tw, th, 8);
-  ctx.stroke();
-  text(ctx, '🗑  Clear plate', tx + tw / 2, ty + 17, 13, '#ff9a8a', 'center', 'bold');
-  text(ctx, 'Click a cooked skewer to plate it', x + w / 2, y + 382, 11, '#c9a06a', 'center', 'normal');
-}
-
-function drawHints(ctx, game) {
-  ctx.fillStyle = 'rgba(10,5,10,0.6)';
-  ctx.fillRect(0, 656, W, 64);
-  const hints = '1-4: pick skewer   •   Q/W/E: sauce   •   Click grill: flip / remove   •   Space: serve   •   M: sound   •   P: pause';
-  text(ctx, hints, W / 2, 694, 14, '#e8c98a', 'center', 'normal');
-  if (game.carrying) {
-    const label = game.carrying.kind === 'skewer'
-      ? `Carrying: ${SKEWER_TYPES[game.carrying.id].name} skewer — click an empty grill slot`
-      : `Carrying: ${SAUCES[game.carrying.id].name} sauce — click the plate`;
-    text(ctx, label, W / 2, 668, 13, '#ffb347', 'center', 'bold');
-  }
-}
-
-function drawToast(ctx, game) {
-  if (!game.toast || game.now > game.toastUntil) return;
-  const a = Math.min(1, (game.toastUntil - game.now) / 0.5);
-  ctx.globalAlpha = a;
-  ctx.fillStyle = '#2a0f1a';
-  rr(ctx, W / 2 - 260, 78, 520, 34, 17);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 1.5;
-  rr(ctx, W / 2 - 260, 78, 520, 34, 17);
-  ctx.stroke();
-  text(ctx, game.toast, W / 2, 96, 15, '#fff3d6', 'center', 'bold');
-  ctx.globalAlpha = 1;
-}
-
-function drawRushBanner(ctx, game) {
-  if (!game.rush || game.now > game.bannerUntil) return;
-  ctx.save();
-  ctx.translate(W / 2, 330);
-  ctx.rotate(-0.04);
-  ctx.globalAlpha = 0.95;
-  ctx.fillStyle = '#ff7a2f';
-  rr(ctx, -230, -44, 460, 88, 16);
-  ctx.fill();
-  ctx.strokeStyle = '#fff3d6';
-  ctx.lineWidth = 3;
-  rr(ctx, -230, -44, 460, 88, 16);
-  ctx.stroke();
-  text(ctx, 'RUSH HOUR!', 0, -12, 40, '#fff3d6', 'center', 'bold');
-  text(ctx, 'Orders are coming faster!', 0, 22, 16, '#2a0f1a', 'center', 'bold');
-  ctx.restore();
-}
-
-function drawTitle(ctx, game) {
-  ctx.fillStyle = 'rgba(10,4,12,0.78)';
-  ctx.fillRect(0, 0, W, H);
-  const cx = W / 2;
-  // One calm card holds the whole title block, clear of the stall behind it.
-  ctx.fillStyle = 'rgba(24,10,20,0.92)';
-  rr(ctx, cx - 400, 92, 800, 520, 20);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 2;
-  rr(ctx, cx - 400, 92, 800, 520, 20);
-  ctx.stroke();
-  text(ctx, '🔥', cx, 150, 56, '#ffb347', 'center', 'bold');
-  const grad = ctx.createLinearGradient(cx - 260, 0, cx + 260, 0);
-  grad.addColorStop(0, '#ffb347');
-  grad.addColorStop(0.5, '#ff7a2f');
-  grad.addColorStop(1, '#ff5a6e');
-  ctx.fillStyle = grad;
-  ctx.font = `bold 88px ${FONT}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('SATE BARA', cx, 228);
-  text(ctx, '— Night Market Grill —', cx, 284, 24, '#fff3d6', 'center', 'bold');
-  text(ctx, 'You run the sate stall at the night market.', cx, 344, 17, '#e8c98a', 'center', 'normal');
-  text(ctx, 'Take an order, grill each skewer just right, add sauce,', cx, 370, 17, '#e8c98a', 'center', 'normal');
-  text(ctx, 'and serve it before the customer walks away.', cx, 396, 17, '#e8c98a', 'center', 'normal');
-  text(ctx, 'Click / 1-4: pick skewer   •   Q/W/E: sauce   •   Space: serve', cx, 452, 15, '#c9a06a', 'center', 'normal');
-  text(ctx, 'Flip skewers for an even cook — burnt ones go in the trash!', cx, 478, 15, '#c9a06a', 'center', 'normal');
-  const pulse = 0.7 + 0.3 * Math.sin(game.now * 4);
-  ctx.globalAlpha = pulse;
-  text(ctx, 'ENTER / CLICK TO START', cx, 540, 26, '#ffb347', 'center', 'bold');
-  ctx.globalAlpha = 1;
-  text(ctx, '150-second shift  •  3 hearts  •  Combos raise your tips', cx, 580, 14, '#c9a06a', 'center', 'normal');
-}
-
-function drawEnd(ctx, game) {
-  ctx.fillStyle = 'rgba(10,4,12,0.75)';
-  ctx.fillRect(0, 0, W, H);
-  const cx = W / 2;
-  ctx.fillStyle = '#fff3d6';
-  rr(ctx, cx - 300, 120, 600, 470, 20);
-  ctx.fill();
-  ctx.strokeStyle = '#ffb347';
-  ctx.lineWidth = 3;
-  rr(ctx, cx - 300, 120, 600, 470, 20);
-  ctx.stroke();
-  text(ctx, 'SHIFT COMPLETE!', cx, 168, 44, '#d93a1e', 'center', 'bold');
-  text(ctx, `Day ${game.day} is done. The coals are out, the crowd went home happy.`, cx, 208, 16, '#5a3a2a', 'center', 'normal');
-  const stars = game.stars();
-  for (let i = 0; i < 3; i++) {
-    drawStar(ctx, cx - 70 + i * 70, 262, 30, i < stars ? '#ffb347' : '#d9c9a8');
-  }
-  const rows = [
-    ['Orders served:', `${game.served}`],
-    ['Orders expired:', `${game.expiredCount}`],
-    ['Skewers burnt:', `${game.burntCount}`],
-    ['Best combo:', `x${game.bestCombo}`],
-    ['Coins earned:', fmtMoney(game.score)],
-  ];
-  rows.forEach((r, i) => {
-    const y = 322 + i * 34;
-    if (i > 0) {
-      ctx.strokeStyle = 'rgba(90,58,42,0.18)';
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const points = [iso(x, y), iso(x + 1, y), iso(x + 1, y + 1), iso(x, y + 1)];
+      const rug = x >= 3 && x < 9 && y >= 2 && y < 6;
+      const checker = (x + y) % 2 === 0;
+      const fill = rug ? (checker ? '#8c3b34' : '#a34a3a') : checker ? '#8a5a33' : '#9a683c';
+      poly(ctx, points, fill, 'rgba(60,32,16,0.32)');
+      const a = iso(x, y + 0.5);
+      const b = iso(x + 1, y + 0.5);
+      ctx.strokeStyle = 'rgba(255,232,190,0.10)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(cx - 190, y - 17);
-      ctx.lineTo(cx + 190, y - 17);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
       ctx.stroke();
     }
-    text(ctx, r[0], cx - 180, y, 17, '#5a3a2a', 'left', 'normal');
-    text(ctx, r[1], cx + 180, y, 17, '#2a1a10', 'right', 'bold');
+  }
+  poly(ctx, board, null, '#5b3820', 5);
+  topDiamond(ctx, 3, 2, 6, 4, 0.01, null, 'rgba(244,216,160,0.35)');
+}
+
+function drawProps(ctx) {
+  const planters = [
+    { x: 0.05, y: 7.65 },
+    { x: 11.05, y: 6.85 },
+    { x: 11.25, y: 0.75 },
+  ];
+  for (const planter of planters) {
+    box(ctx, planter.x, planter.y, 0.62, 0.62, 0.34, { top: '#8a5a33', left: '#6f4525', right: '#5b3820' });
+    const p = iso(planter.x + 0.31, planter.y + 0.31, 0.34);
+    ellipse(ctx, p.x - 10, p.y - 14, 14, 11, '#2f9e44');
+    ellipse(ctx, p.x + 9, p.y - 18, 16, 12, '#37b24d');
+    ellipse(ctx, p.x, p.y - 26, 13, 10, '#51cf66');
+  }
+
+  for (let i = 0; i < 9; i++) {
+    const p = iso(1.2 + i * 1.22, 7.72, 0.08);
+    ellipse(ctx, p.x, p.y, 5, 4, i % 2 ? '#ffd166' : '#ff9a3c');
+  }
+}
+
+function drawStallBack(ctx) {
+  box(ctx, 1, 0.9, 10, 0.7, 0.55, { top: '#b98a52', left: '#7c532c', right: '#664321' });
+  for (let i = 0; i < 8; i++) {
+    const p = iso(1.55 + i * 1.08, 1.25, 0.55);
+    cylinder(ctx, p.x, p.y - 12, 9, 4, 18, i % 2 ? '#14665f' : '#b74334', '#f4d8a0');
+  }
+
+  box(ctx, 0.85, 0.45, 0.22, 0.22, 2.55, { top: '#7c532c', left: '#5b3820', right: '#4a2c18' });
+  box(ctx, 5.9, 0.35, 0.22, 0.22, 2.55, { top: '#7c532c', left: '#5b3820', right: '#4a2c18' });
+  box(ctx, 10.95, 0.45, 0.22, 0.22, 2.55, { top: '#7c532c', left: '#5b3820', right: '#4a2c18' });
+  box(ctx, 0.65, 0.18, 10.7, 1.05, 0.16, { top: '#b74334', left: '#8c3328', right: '#74291f' }, 2.55);
+  for (let i = 0; i < 6; i++) {
+    topDiamond(ctx, 0.75 + i * 1.78, 0.2, 0.86, 1.0, 2.72, 'rgba(244,216,160,0.85)');
+  }
+
+  const sign = iso(3.8, 0.45, 2.18);
+  fillRR(ctx, sign.x - 92, sign.y - 18, 184, 36, 10, '#2a1b12');
+  strokeRR(ctx, sign.x - 92, sign.y - 18, 184, 36, 10, '#ffd166', 2);
+  text(ctx, 'SATE BARA', sign.x, sign.y + 1, 20, '#ffd166');
+}
+
+function drawCrates(ctx, state, ui) {
+  SKEWERS.forEach((item, index) => {
+    const world = CRATE_WORLD[index];
+    box(ctx, world.x, world.y, 1.0, 0.9, 0.48, { top: '#c99a5b', left: '#8a5a33', right: '#6f4525' });
+    topDiamond(ctx, world.x + 0.12, world.y + 0.1, 0.76, 0.7, 0.49, '#3a2415');
+    const p = cratePos(item.id);
+    drawSkewerIcon(ctx, p.x - 14, p.y - 4, item.id, 0.62);
+    drawSkewerIcon(ctx, p.x + 10, p.y + 6, item.id, 0.62);
+    drawSkewerIcon(ctx, p.x + 2, p.y - 14, item.id, 0.55);
   });
-  const pulse = 0.7 + 0.3 * Math.sin(game.now * 4);
-  ctx.globalAlpha = pulse;
-  text(ctx, 'ENTER: Next Day (faster!)', cx, 520, 20, '#d93a1e', 'center', 'bold');
-  ctx.globalAlpha = 1;
-  text(ctx, 'ESC: back to title', cx, 552, 14, '#5a3a2a', 'center', 'normal');
+
+  SKEWERS.forEach((item) => {
+    const p = cratePos(item.id);
+    const hovered = ui.hover === `ingredient:${item.id}`;
+    const held = state.held === item.id;
+    if (hovered || held) strokeRR(ctx, p.x - 58, p.y - 48, 116, 96, 14, held ? '#ffd166' : 'rgba(255,255,255,0.75)', 3);
+    tag(ctx, held ? `${item.name} HELD` : item.name, p.x, p.y + 42, held ? '#b74334' : '#14665f');
+  });
 }
 
-function drawPaused(ctx) {
-  ctx.fillStyle = 'rgba(10,4,12,0.6)';
-  ctx.fillRect(0, 0, W, H);
-  text(ctx, 'PAUSED — press P to resume', W / 2, H / 2, 30, '#fff3d6', 'center', 'bold');
-}
-
-function drawCarried(ctx, game) {
-  if (!game.carrying || !game.mouse) return;
-  const { x, y } = game.mouse;
-  ctx.save();
-  ctx.globalAlpha = 0.95;
-  if (game.carrying.kind === 'skewer') {
-    drawMiniSkewer(ctx, x, y, game.carrying.id, 10, 1.3);
-  } else {
-    ctx.fillStyle = SAUCES[game.carrying.id].color;
+function drawSauceStation(ctx, state, ui) {
+  box(ctx, 9.6, 1.8, 1.9, 1.2, 0.62, { top: '#c99a5b', left: '#14665f', right: '#0f4f4a' });
+  const title = saucePos('soy');
+  tag(ctx, 'SAUCE', title.x, title.y - 58, '#14665f');
+  for (const sauce of SAUCES.slice(0, 3)) {
+    const p = saucePos(sauce.id);
+    const active = state.plate && state.plate.sauce === sauce.id;
+    if (ui.hover === `sauce:${sauce.id}` || active) ellipse(ctx, p.x, p.y, 34, 22, 'rgba(255,209,102,0.22)');
+    ellipse(ctx, p.x, p.y + 4, 27, 15, '#f4e3c1', 'rgba(0,0,0,0.2)');
+    ellipse(ctx, p.x, p.y + 2, 20, 10, sauce.color);
+    ctx.strokeStyle = '#d9b77c';
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(x, y, 14, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#fff3d6';
+    ctx.moveTo(p.x + 8, p.y - 2);
+    ctx.lineTo(p.x + 24, p.y - 16);
+    ctx.stroke();
+    tag(ctx, sauce.short, p.x, p.y + 30, active ? '#b74334' : '#3b2418');
+  }
+}
+
+function drawPlateStation(ctx, state, ui) {
+  box(ctx, 9.2, 3.9, 1.8, 1.1, 0.58, { top: '#c99a5b', left: '#8a5a33', right: '#6f4525' });
+  const p = platePos();
+  if (ui.hover === 'plate') ellipse(ctx, p.x, p.y, 58, 28, 'rgba(255,209,102,0.20)');
+  ellipse(ctx, p.x, p.y + 5, 50, 20, '#fff7e6', 'rgba(0,0,0,0.18)');
+  ellipse(ctx, p.x, p.y + 3, 36, 13, '#eadfc8');
+  if (state.plate) {
+    drawSkewerIcon(ctx, p.x, p.y - 2, state.plate.skewer, 0.86, { progress: 0.86, flipped: true }, -0.12);
+    const sauce = sauceById(state.plate.sauce);
+    if (sauce.id !== 'none') {
+      ctx.strokeStyle = sauce.color;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(p.x - 24, p.y - 8);
+      ctx.quadraticCurveTo(p.x, p.y + 4, p.x + 24, p.y - 9);
+      ctx.stroke();
+    }
+    tag(ctx, state.plate.quality.toUpperCase(), p.x, p.y + 38, state.plate.quality === 'perfect' ? '#2f9e44' : '#14665f');
+  } else {
+    tag(ctx, 'PLATE', p.x, p.y + 38, '#14665f');
+  }
+
+  const bin = iso(11.25, 5.6, 0);
+  cylinder(ctx, bin.x, bin.y - 24, 18, 7, 34, '#5b6470', '#8a94a3');
+}
+
+function drawGrillBase(ctx) {
+  box(ctx, 3.6, 2.7, 5.9, 1.5, 0.72, { top: '#2b2320', left: '#14665f', right: '#0f4f4a' });
+  topDiamond(ctx, 3.75, 2.84, 5.6, 1.22, 0.73, '#211916', 'rgba(255,255,255,0.08)');
+  for (let i = 0; i < 7; i++) {
+    const a = iso(3.9 + i * 0.82, 2.88, 0.74);
+    const b = iso(3.9 + i * 0.82, 4.02, 0.74);
+    ctx.strokeStyle = 'rgba(255,255,255,0.10)';
     ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
   }
-  ctx.restore();
+  const front = iso(6.55, 4.22, 0.28);
+  ellipse(ctx, front.x, front.y, 150, 18, 'rgba(255,122,47,0.16)');
+  tag(ctx, 'GRILL', front.x, front.y + 26, '#b74334');
 }
 
-export function draw(ctx, game, paused) {
-  ctx.save();
-  if (game.shake > 0) {
-    ctx.translate((Math.random() - 0.5) * game.shake * 8, (Math.random() - 0.5) * game.shake * 8);
+function drawChef(ctx, state) {
+  const p = chefPos();
+  const bob = Math.sin(state.animTime * 2.1) * 2;
+  shadow(ctx, p.x, p.y + 8, 48, 15, 0.22);
+  fillRR(ctx, p.x - 27, p.y - 88 + bob, 54, 78, 16, '#f7f0df');
+  fillRR(ctx, p.x - 20, p.y - 62 + bob, 40, 52, 10, '#14665f');
+  ellipse(ctx, p.x, p.y - 106 + bob, 20, 20, '#f2c49b');
+  fillRR(ctx, p.x - 24, p.y - 136 + bob, 48, 18, 9, '#ffffff');
+  ellipse(ctx, p.x - 13, p.y - 136 + bob, 13, 10, '#ffffff');
+  ellipse(ctx, p.x + 12, p.y - 137 + bob, 14, 11, '#ffffff');
+  ellipse(ctx, p.x - 7, p.y - 108 + bob, 2.2, 2.2, '#2b1d16');
+  ellipse(ctx, p.x + 7, p.y - 108 + bob, 2.2, 2.2, '#2b1d16');
+  ctx.strokeStyle = '#2b1d16';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y - 101 + bob, 7, 0.15 * Math.PI, 0.85 * Math.PI);
+  ctx.stroke();
+
+  const flipping = state.flipAnim > 0;
+  const hand = flipping ? { x: p.x + 62, y: p.y - 98 + bob } : { x: p.x + 48, y: p.y - 50 + Math.sin(state.animTime * 3) * 3 };
+  ctx.strokeStyle = '#f2c49b';
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p.x + 20, p.y - 70 + bob);
+  ctx.lineTo(hand.x, hand.y);
+  ctx.stroke();
+  ctx.strokeStyle = '#d9b77c';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(hand.x, hand.y);
+  ctx.lineTo(hand.x + 26, hand.y - 10);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(p.x - 20, p.y - 70 + bob);
+  ctx.lineTo(p.x - 42, p.y - 44 + bob);
+  ctx.stroke();
+}
+
+function drawMeter(ctx, x, y, slot) {
+  const w = 58;
+  const h = 8;
+  fillRR(ctx, x - w / 2, y, w, h, 4, '#241a16');
+  fillRR(ctx, x - w / 2 + w * 0.42, y, w * 0.26, h, 3, 'rgba(155,246,163,0.55)');
+  fillRR(ctx, x - w / 2 + w * 0.78, y, w * 0.14, h, 3, 'rgba(255,209,102,0.75)');
+  fillRR(ctx, x - w / 2, y, w * clamp(slot.progress, 0, 1), h, 4, slot.progress >= 1 ? '#17110f' : '#ff9a3c');
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - w / 2 + w * clamp(slot.progress, 0, 1), y - 2);
+  ctx.lineTo(x - w / 2 + w * clamp(slot.progress, 0, 1), y + h + 2);
+  ctx.stroke();
+}
+
+function drawGrillSlots(ctx, state, ui) {
+  state.grill.forEach((slot, index) => {
+    const p = slotPos(index);
+    const status = slotStatus(slot);
+    const hovered = ui.hover === `slot:${index}`;
+    const glow = status === 'ready' ? 'rgba(255,209,102,0.30)' : status === 'flip' ? 'rgba(155,246,163,0.24)' : hovered ? 'rgba(255,255,255,0.16)' : null;
+    if (glow) ellipse(ctx, p.x, p.y, 54, 28, glow);
+    poly(
+      ctx,
+      [
+        { x: p.x - 38, y: p.y - 7 },
+        { x: p.x + 30, y: p.y - 18 },
+        { x: p.x + 42, y: p.y + 7 },
+        { x: p.x - 26, y: p.y + 18 },
+      ],
+      '#241a16',
+      hovered ? '#ffffff' : 'rgba(255,255,255,0.14)',
+      hovered ? 2 : 1,
+    );
+    ellipse(ctx, p.x, p.y + 8, 30, 8, slot.skewer ? 'rgba(255,122,47,0.28)' : 'rgba(255,122,47,0.12)');
+
+    if (!slot.skewer) {
+      if (state.held) tag(ctx, 'PLACE', p.x, p.y - 30, '#14665f');
+      return;
+    }
+
+    drawSkewerIcon(ctx, p.x, p.y - 2, slot.skewer, 0.96, slot, -0.32);
+    drawMeter(ctx, p.x, p.y - 42, slot);
+    if (status === 'flip') tag(ctx, 'FLIP', p.x, p.y - 58, '#2f9e44');
+    else if (status === 'ready') tag(ctx, 'READY', p.x, p.y - 58, '#d97706');
+    else if (status === 'burnt') tag(ctx, 'BURNT', p.x, p.y - 58, '#5b1f16');
+    else if (status === 'late') tag(ctx, 'LATE', p.x, p.y - 58, '#b74334');
+  });
+}
+
+function drawCustomer(ctx, state, index, ui) {
+  const p = customerPos(index);
+  const customer = state.customers[index];
+  shadow(ctx, p.x, p.y + 34, 42, 13, 0.2);
+  cylinder(ctx, p.x, p.y + 18, 24, 9, 18, '#7c532c', '#c99a5b');
+  if (!customer) {
+    tag(ctx, 'OPEN', p.x, p.y + 48, 'rgba(20,102,95,0.75)');
+    return;
   }
-  drawSky(ctx, game);
-  drawStringLights(ctx, game.now);
-  drawTopBar(ctx, game);
-  drawOrderBoard(ctx, game);
-  drawCustomers(ctx, game);
-  drawIngredients(ctx, game);
-  drawGrill(ctx, game);
-  drawPlate(ctx, game);
-  drawHints(ctx, game);
-  drawToast(ctx, game);
-  drawRushBanner(ctx, game);
-  drawCarried(ctx, game);
-  if (game.mode === 'title') drawTitle(ctx, game);
-  if (game.mode === 'over') drawEnd(ctx, game);
-  if (paused && game.mode === 'play') drawPaused(ctx);
-  ctx.restore();
+
+  const hovered = ui.hover === `customer:${index}`;
+  if (hovered) strokeRR(ctx, p.x - 58, p.y - 148, 116, 190, 16, 'rgba(255,255,255,0.8)', 3);
+  const bob = Math.sin(state.animTime * 2 + index) * 1.5;
+  const bodyColor = CUSTOMER_COLORS[customer.variant % CUSTOMER_COLORS.length];
+  const skin = SKIN_TONES[customer.variant % SKIN_TONES.length];
+  fillRR(ctx, p.x - 23, p.y - 58 + bob, 46, 58, 15, bodyColor);
+  ellipse(ctx, p.x, p.y - 76 + bob, 18, 18, skin);
+  if (customer.variant === 0) {
+    fillRR(ctx, p.x - 20, p.y - 96 + bob, 40, 12, 6, '#b74334');
+    fillRR(ctx, p.x + 8, p.y - 90 + bob, 24, 6, 3, '#b74334');
+  } else if (customer.variant === 1) {
+    ellipse(ctx, p.x + 10, p.y - 94 + bob, 9, 9, '#2b1d16');
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - 82 + bob, 19, Math.PI, Math.PI * 2);
+    ctx.fillStyle = '#2b1d16';
+    ctx.fill();
+  } else if (customer.variant === 2) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y - 82 + bob, 20, Math.PI, Math.PI * 2);
+    ctx.fillStyle = '#14665f';
+    ctx.fill();
+    fillRR(ctx, p.x - 20, p.y - 82 + bob, 40, 8, 4, '#14665f');
+  } else {
+    ctx.strokeStyle = '#2b1d16';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p.x - 7, p.y - 78 + bob, 6, 0, Math.PI * 2);
+    ctx.arc(p.x + 7, p.y - 78 + bob, 6, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ellipse(ctx, p.x - 6, p.y - 78 + bob, 2, 2, '#2b1d16');
+  ellipse(ctx, p.x + 6, p.y - 78 + bob, 2, 2, '#2b1d16');
+  const ratio = clamp(customer.patience / customer.maxPatience, 0, 1);
+  ctx.strokeStyle = '#2b1d16';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (ratio > 0.35) ctx.arc(p.x, p.y - 70 + bob, 6, 0.15 * Math.PI, 0.85 * Math.PI);
+  else ctx.arc(p.x, p.y - 64 + bob, 6, 1.15 * Math.PI, 1.85 * Math.PI);
+  ctx.stroke();
+
+  const bx = p.x - 56;
+  const by = p.y - 146;
+  fillRR(ctx, bx, by, 112, 58, 12, '#fff7e6');
+  strokeRR(ctx, bx, by, 112, 58, 12, ratio < 0.25 ? '#d64535' : 'rgba(0,0,0,0.18)', ratio < 0.25 ? 3 : 1.5);
+  drawSkewerIcon(ctx, bx + 25, by + 22, customer.skewer, 0.58, { progress: 0.86, flipped: true }, -0.18);
+  ellipse(ctx, bx + 52, by + 22, 7, 7, sauceById(customer.sauce).color, 'rgba(0,0,0,0.18)');
+  text(ctx, `${skewerById(customer.skewer).short}+${sauceById(customer.sauce).short}`, bx + 82, by + 22, 11, '#3b2418');
+  fillRR(ctx, bx + 14, by + 42, 84, 6, 3, '#eadfc8');
+  fillRR(ctx, bx + 14, by + 42, 84 * ratio, 6, 3, ratio < 0.25 ? '#d64535' : '#2f9e44');
+  if (ratio < 0.25) text(ctx, '!', bx + 100, by + 11, 17, '#d64535');
+}
+
+function drawParticles(ctx, state) {
+  state.grill.forEach((slot, index) => {
+    if (!slot.skewer) return;
+    const p = slotPos(index);
+    for (let k = 0; k < 4; k++) {
+      const phase = (state.animTime * 0.55 + k * 0.29 + index * 0.17) % 1;
+      const x = p.x + Math.sin(state.animTime * 2 + k * 1.7 + index) * 7;
+      const y = p.y - 20 - phase * 54;
+      const r = 5 + phase * 13;
+      ellipse(ctx, x, y, r, r * 0.72, `rgba(220,220,230,${0.15 * (1 - phase)})`);
+    }
+  });
+
+  for (let i = 0; i < 22; i++) {
+    const t = i / 21;
+    const x = 620 + t * 230 + Math.sin(state.animTime * 3 + i) * 5;
+    const y = 286 + t * 82 - ((state.animTime * 18 + i * 9) % 26);
+    ellipse(ctx, x, y, 2.2, 2.2, `rgba(255,154,60,${0.35 + pseudo(i) * 0.35})`);
+  }
+
+  if (state.plate) {
+    const p = platePos();
+    for (let k = 0; k < 3; k++) {
+      const phase = (state.animTime * 0.7 + k * 0.33) % 1;
+      ellipse(ctx, p.x + Math.sin(state.animTime * 2 + k) * 6, p.y - 18 - phase * 34, 5 + phase * 8, 4 + phase * 6, `rgba(255,255,255,${0.18 * (1 - phase)})`);
+    }
+  }
+}
+
+function drawLights(ctx, state) {
+  const posts = [iso(0.96, 0.56, 2.55), iso(6.01, 0.46, 2.55), iso(11.06, 0.56, 2.55)];
+  const spans = [
+    [posts[0], posts[1]],
+    [posts[1], posts[2]],
+  ];
+  spans.forEach(([a, b], spanIndex) => {
+    const sag = 30 + spanIndex * 4;
+    const mid = { x: (a.x + b.x) / 2, y: Math.max(a.y, b.y) + sag };
+    ctx.strokeStyle = 'rgba(20,12,8,0.65)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.quadraticCurveTo(mid.x, mid.y, b.x, b.y);
+    ctx.stroke();
+    for (let i = 1; i < 9; i++) {
+      const t = i / 9;
+      const x = (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * mid.x + t * t * b.x;
+      const y = (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * mid.y + t * t * b.y;
+      const flicker = 0.75 + Math.sin(state.animTime * 4 + i * 1.3 + spanIndex) * 0.12;
+      ellipse(ctx, x, y + 7, 10, 10, `rgba(255,209,102,${0.16 * flicker})`);
+      ellipse(ctx, x, y + 7, 4.2, 5.2, '#ffd166');
+    }
+  });
+}
+
+function anchorPoint(anchor) {
+  if (anchor === 'hud') return { x: 640, y: 118 };
+  if (anchor === 'plate') {
+    const p = platePos();
+    return { x: p.x, y: p.y - 66 };
+  }
+  const [kind, value] = anchor.split(':');
+  if (kind === 'slot') {
+    const p = slotPos(Number(value));
+    return { x: p.x, y: p.y - 76 };
+  }
+  if (kind === 'customer') {
+    const p = customerPos(Number(value));
+    return { x: p.x, y: p.y - 166 };
+  }
+  if (kind === 'crate') {
+    const p = cratePos(value);
+    return { x: p.x, y: p.y - 62 };
+  }
+  if (kind === 'sauce') {
+    const p = saucePos(value);
+    return { x: p.x, y: p.y - 48 };
+  }
+  return { x: 640, y: 140 };
+}
+
+function drawFeedback(ctx, state) {
+  for (const item of state.feedback) {
+    const p = anchorPoint(item.anchor);
+    const alpha = clamp(1 - item.age / item.ttl, 0, 1);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.font = '800 16px Arial, Helvetica, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(20,12,8,0.75)';
+    const y = p.y - item.age * 24;
+    ctx.strokeText(item.text, p.x, y);
+    ctx.fillStyle = item.color;
+    ctx.fillText(item.text, p.x, y);
+    ctx.restore();
+  }
+}
+
+function drawHeart(ctx, x, y, filled) {
+  ctx.beginPath();
+  ctx.moveTo(x, y + 10);
+  ctx.bezierCurveTo(x - 16, y - 4, x - 7, y - 16, x, y - 7);
+  ctx.bezierCurveTo(x + 7, y - 16, x + 16, y - 4, x, y + 10);
+  ctx.fillStyle = filled ? '#ff5a76' : 'rgba(255,255,255,0.18)';
+  ctx.fill();
+}
+
+function drawButton(ctx, button, hovered, primary = true) {
+  fillRR(ctx, button.x, button.y, button.w, button.h, 14, primary ? '#b74334' : '#14665f');
+  strokeRR(ctx, button.x, button.y, button.w, button.h, 14, hovered ? '#ffffff' : 'rgba(255,255,255,0.35)', hovered ? 3 : 1.5);
+  text(ctx, button.label, button.x + button.w / 2, button.y + button.h / 2 + 1, button.h > 50 ? 22 : 16, '#ffffff');
+}
+
+function formatTime(seconds) {
+  const total = Math.ceil(seconds);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function drawHUD(ctx, state, ui) {
+  const top = ctx.createLinearGradient(0, 0, 0, 96);
+  top.addColorStop(0, 'rgba(18,13,29,0.96)');
+  top.addColorStop(1, 'rgba(42,22,15,0.92)');
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, W, 96);
+  ctx.fillStyle = 'rgba(42,22,15,0.94)';
+  ctx.fillRect(0, 646, W, 74);
+
+  text(ctx, 'SATE BARA', 24, 34, 24, '#ffd166', 'left', 900);
+  text(ctx, 'Night Market Grill', 24, 62, 14, '#ffe8b3', 'left', 700);
+
+  state.customers.forEach((customer, index) => {
+    const x = 248 + index * 162;
+    const y = 20;
+    if (!customer) {
+      fillRR(ctx, x, y, 150, 62, 12, 'rgba(255,255,255,0.08)');
+      text(ctx, 'Open seat', x + 75, y + 31, 14, 'rgba(255,255,255,0.45)');
+      return;
+    }
+    const ratio = clamp(customer.patience / customer.maxPatience, 0, 1);
+    fillRR(ctx, x, y, 150, 62, 12, '#fff7e6');
+    strokeRR(ctx, x, y, 150, 62, 12, ratio < 0.25 ? '#d64535' : 'rgba(0,0,0,0.15)', ratio < 0.25 ? 3 : 1.5);
+    drawSkewerIcon(ctx, x + 30, y + 24, customer.skewer, 0.62, { progress: 0.86, flipped: true }, -0.18);
+    text(ctx, customer.name, x + 62, y + 16, 13, '#3b2418', 'left', 800);
+    text(ctx, `${skewerById(customer.skewer).name} · ${sauceById(customer.sauce).short}`, x + 62, y + 34, 11, '#6f4525', 'left', 700);
+    fillRR(ctx, x + 14, y + 50, 122, 6, 3, '#eadfc8');
+    fillRR(ctx, x + 14, y + 50, 122 * ratio, 6, 3, ratio < 0.25 ? '#d64535' : '#2f9e44');
+  });
+
+  text(ctx, formatTime(state.timeLeft), 918, 34, 30, '#ffffff', 'left', 900);
+  text(ctx, 'SHIFT CLOCK', 918, 62, 11, 'rgba(255,255,255,0.62)', 'left', 800);
+  text(ctx, `$${state.revenue}`, 1032, 34, 26, '#ffd166', 'left', 900);
+  text(ctx, 'REVENUE', 1032, 62, 11, 'rgba(255,255,255,0.62)', 'left', 800);
+  for (let i = 0; i < 3; i++) drawHeart(ctx, 1144 + i * 34, 34, i < state.hearts);
+  text(ctx, `Combo x${state.combo}${state.rushTimer > 0 ? '  RUSH' : ''}`, 1144, 64, 14, state.rushTimer > 0 ? '#ffd166' : '#ffffff', 'left', 800);
+
+  if (state.rushTimer > 0 && state.mode === 'playing') {
+    fillRR(ctx, 548, 608, 184, 30, 15, '#b74334');
+    text(ctx, 'RUSH! DOUBLE REVENUE', 640, 623, 13, '#ffffff');
+  }
+
+  text(ctx, getHint(state), 24, 684, 18, '#fff7e6', 'left', 700);
+  const heldText = state.held ? `Holding: ${skewerById(state.held).name}` : 'Holding: none';
+  const plateText = state.plate
+    ? `Plate: ${skewerById(state.plate.skewer).name} + ${sauceById(state.plate.sauce).name}`
+    : 'Plate: empty';
+  text(ctx, `${heldText}   |   ${plateText}`, 640, 684, 15, '#ffe8b3');
+
+  if (state.mode === 'playing') {
+    drawButton(ctx, BUTTONS.restart, ui.hover === 'button:restart', false);
+    drawButton(ctx, BUTTONS.pause, ui.hover === 'button:pause', true);
+  }
+}
+
+function drawOverlays(ctx, state, ui) {
+  if (state.mode === 'title') {
+    ctx.fillStyle = 'rgba(10,8,20,0.55)';
+    ctx.fillRect(0, 0, W, H);
+    fillRR(ctx, 340, 150, 600, 410, 24, 'rgba(255,247,230,0.97)');
+    strokeRR(ctx, 340, 150, 600, 410, 24, '#ffd166', 3);
+    text(ctx, 'SATE BARA', 640, 208, 48, '#b74334', 'center', 900);
+    text(ctx, 'Night Market Grill', 640, 248, 24, '#14665f', 'center', 800);
+    text(ctx, 'Run the grill through a busy 150-second shift.', 640, 292, 18, '#3b2418');
+    const lines = [
+      'Pick a skewer, place it on the grill.',
+      'Flip in the golden zone, plate when ready.',
+      'Add the matching sauce and serve the guest.',
+      'Keep the combo alive through every rush.',
+    ];
+    lines.forEach((line, index) => text(ctx, line, 640, 332 + index * 28, 17, '#5b3820'));
+    drawButton(ctx, BUTTONS.start, ui.hover === 'button:start', true);
+    return;
+  }
+
+  if (state.mode === 'paused') {
+    ctx.fillStyle = 'rgba(10,8,20,0.52)';
+    ctx.fillRect(0, 0, W, H);
+    fillRR(ctx, 390, 190, 500, 320, 24, 'rgba(255,247,230,0.97)');
+    strokeRR(ctx, 390, 190, 500, 320, 24, '#ffd166', 3);
+    text(ctx, 'Paused', 640, 248, 42, '#b74334', 'center', 900);
+    text(ctx, 'The coals are waiting.', 640, 292, 18, '#3b2418');
+    text(ctx, `Revenue $${state.revenue}  |  Served ${state.served}  |  Combo x${state.combo}`, 640, 330, 17, '#5b3820');
+    drawButton(ctx, BUTTONS.resume, ui.hover === 'button:resume', true);
+    drawButton(ctx, BUTTONS.restartPause, ui.hover === 'button:restart', false);
+    return;
+  }
+
+  if (state.mode === 'complete') {
+    ctx.fillStyle = 'rgba(10,8,20,0.48)';
+    ctx.fillRect(0, 0, W, H);
+    fillRR(ctx, 350, 140, 580, 430, 24, 'rgba(255,247,230,0.97)');
+    strokeRR(ctx, 350, 140, 580, 430, 24, '#ffd166', 3);
+    text(ctx, 'SHIFT COMPLETE', 640, 198, 40, '#b74334', 'center', 900);
+    ellipse(ctx, 640, 278, 46, 46, '#ffd166', '#b74334');
+    text(ctx, state.finalGrade || 'C', 640, 280, 42, '#3b2418', 'center', 900);
+    const rows = [
+      ['Revenue', `$${state.revenue}`],
+      ['Guests served', `${state.served}`],
+      ['Perfect plates', `${state.perfect}`],
+      ['Best combo', `x${state.bestCombo}`],
+      ['Hearts left', `${state.hearts}`],
+    ];
+    rows.forEach(([label, value], index) => {
+      const y = 348 + index * 28;
+      text(ctx, label, 500, y, 17, '#5b3820', 'left', 700);
+      text(ctx, value, 780, y, 17, '#3b2418', 'right', 900);
+    });
+    drawButton(ctx, BUTTONS.again, ui.hover === 'button:again', true);
+  }
+}
+
+export function drawGame(ctx, state, ui) {
+  ctx.clearRect(0, 0, W, H);
+  drawBackground(ctx, state);
+  drawFloor(ctx);
+  drawProps(ctx);
+  drawStallBack(ctx);
+  drawCrates(ctx, state, ui);
+  drawGrillBase(ctx);
+  drawChef(ctx, state);
+  drawGrillSlots(ctx, state, ui);
+  drawSauceStation(ctx, state, ui);
+  drawPlateStation(ctx, state, ui);
+  for (let i = 0; i < 4; i++) drawCustomer(ctx, state, i, ui);
+  drawParticles(ctx, state);
+  drawLights(ctx, state);
+  drawFeedback(ctx, state);
+  drawHUD(ctx, state, ui);
+  drawOverlays(ctx, state, ui);
 }

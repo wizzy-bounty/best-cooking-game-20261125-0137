@@ -1,49 +1,97 @@
-// data.js — menu, skewers, sauces and customers for Sate Bara.
-// Everything here is original: invented names, prices and colours.
+export const VIEW = { width: 1280, height: 720 };
+export const SHIFT_SECONDS = 150;
+export const MAX_HEARTS = 3;
 
-export const SKEWER_TYPES = {
-  ayam:    { name: 'Chicken', price: 220, raw: '#f6b8a0', mid: '#d98a4e', done: '#9c5a24', stick: '#d9a05b' },
-  sapi:    { name: 'Beef',    price: 300, raw: '#e58a8a', mid: '#b45a3a', done: '#7c3418', stick: '#d9a05b' },
-  kambing: { name: 'Goat',    price: 340, raw: '#e09a90', mid: '#a85a40', done: '#6e2f16', stick: '#d9a05b' },
-  tahu:    { name: 'Tofu',    price: 120, raw: '#f7ead0', mid: '#e8c98a', done: '#b98d3e', stick: '#d9a05b' },
-};
-
-export const SKEWER_ORDER = ['ayam', 'sapi', 'kambing', 'tahu'];
-
-export const SAUCES = {
-  kacang: { name: 'Peanut',    color: '#c98a3d', dark: '#8a5a1e' },
-  kecap:  { name: 'Sweet Soy', color: '#4a2c14', dark: '#2a1808' },
-  sambal: { name: 'Chili',     color: '#d93a1e', dark: '#8f1f0c' },
-};
-
-export const SAUCE_ORDER = ['kacang', 'kecap', 'sambal'];
-
-export const CUSTOMERS = [
-  { name: 'Ratna', skin: '#f2c29a', hair: '#3a2a1c', shirt: '#c94f6d' },
-  { name: 'Dedi',  skin: '#e8b088', hair: '#1e1410', shirt: '#2e7d6b' },
-  { name: 'Putri', skin: '#f6cfae', hair: '#241812', shirt: '#e8a13a' },
-  { name: 'Budi',  skin: '#d9a06e', hair: '#6e6e6e', shirt: '#4a6fa5' },
-  { name: 'Sari',  skin: '#f2c29a', hair: '#14100c', shirt: '#7a4a9e' },
-  { name: 'Joko',  skin: '#e8b088', hair: '#0e0a08', shirt: '#3a8a4a' },
-  { name: 'Tini',  skin: '#f6cfae', hair: '#8a8a8a', shirt: '#d95f4a' },
-  { name: 'Lala',  skin: '#f2c29a', hair: '#2a1a10', shirt: '#e87ab0' },
+export const SKEWERS = [
+  {
+    id: 'chicken',
+    name: 'Chicken',
+    short: 'CHK',
+    price: 14,
+    cookTime: 12,
+    raw: '#f7c99b',
+    mid: '#e58a3c',
+    cooked: '#a85a24',
+    burnt: '#2b1d16',
+    accent: '#f6b352',
+  },
+  {
+    id: 'beef',
+    name: 'Beef',
+    short: 'BEEF',
+    price: 17,
+    cookTime: 15,
+    raw: '#d97b6c',
+    mid: '#b84a35',
+    cooked: '#7c2f22',
+    burnt: '#241612',
+    accent: '#e06a4f',
+  },
+  {
+    id: 'lamb',
+    name: 'Lamb',
+    short: 'LAMB',
+    price: 18,
+    cookTime: 14,
+    raw: '#e6a08a',
+    mid: '#c46a45',
+    cooked: '#8a3f27',
+    burnt: '#261712',
+    accent: '#d98c5f',
+  },
+  {
+    id: 'veggie',
+    name: 'Veggie',
+    short: 'VEG',
+    price: 12,
+    cookTime: 10,
+    raw: '#b9d977',
+    mid: '#7fb84a',
+    cooked: '#4d7c2e',
+    burnt: '#202414',
+    accent: '#9ccc65',
+  },
 ];
 
-export const DAY_LENGTH = 150; // seconds per shift
-export const RUSH_AT = 60;     // seconds left when rush hour starts
-export const MAX_ORDERS = 4;
-export const GRILL_SLOTS = 6;
+export const SAUCES = [
+  { id: 'peanut', name: 'Peanut', short: 'PNT', color: '#d9a441' },
+  { id: 'soy', name: 'Sweet Soy', short: 'SOY', color: '#5b3423' },
+  { id: 'chili', name: 'Chili', short: 'CHL', color: '#d64535' },
+  { id: 'none', name: 'No Sauce', short: 'NON', color: '#e8e0cf' },
+];
 
-export function orderPrice(skewers, sauce) {
-  let total = skewers.reduce((s, id) => s + SKEWER_TYPES[id].price, 0);
-  if (sauce) total += 40;
-  return total;
+export const CUSTOMER_NAMES = [
+  'Mina', 'Theo', 'Ari', 'Sari', 'Jonas', 'Lena', 'Rafi', 'Noor',
+  'Pavel', 'Iris', 'Dimas', 'Mara', 'Ken', 'Tara', 'Omar', 'Nina',
+];
+
+export function skewerById(id) {
+  return SKEWERS.find((item) => item.id === id) ?? SKEWERS[0];
 }
 
-// Doneness windows for a skewer on the grill.
-export const DONENESS = {
-  perfectMin: 55,
-  perfectMax: 92,
-  burntAt: 100,
-  ratePerSec: 9,
-};
+export function sauceById(id) {
+  return SAUCES.find((item) => item.id === id) ?? SAUCES[3];
+}
+
+export function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function next() {
+    a += 0x6d2b79f5;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export function pick(rng, items) {
+  return items[Math.floor(rng() * items.length)];
+}
+
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+export function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
